@@ -9,7 +9,7 @@
 body{background:#222;color:#fff;font-family:system-ui;text-align:center;padding:10px;}
 .container{max-width:460px;margin:0 auto;}
 #hall{margin-top:30px;}
-#hallTip{font-size:20px;color:#ffdd44;margin:10px 0;min-height:28px;}
+#hallTip{font-size:18px;color:#ffdd44;margin:10px 0;min-height:28px;word-break:break-all;}
 #startBtn{display:none;margin:15px auto;font-size:18px;padding:10px 30px;}
 #game{display:none;}
 #myRole{font-size:16px;color:#ffd066;margin:4px 0;}
@@ -69,15 +69,21 @@ const firebaseConfig = {
   appId: "1:817508526856:web:5df14ea809f18c3ad41abd",
   measurementId: "G-ZQRTLDL7Z6"
 };
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+
+let db;
+try{
+  const app = initializeApp(firebaseConfig);
+  db = getDatabase(app);
+}catch(e){
+  document.getElementById("hallTip").innerText = "初始化失败："+e.message;
+}
 
 const SIZE = 15;
 const CELL = 26;
 const PADDING = 14;
 const TIME_LIMIT = 20;
-let playerIndex = 0; // 1=玩家1 2=玩家2
-let myChess = null; // black / white
+let playerIndex = 0;
+let myChess = null;
 let roomRef = ref(db,"global/room");
 let board = Array(SIZE).fill().map(()=>Array(SIZE).fill(0));
 let turn = 1;
@@ -106,7 +112,6 @@ const quickBtns = document.querySelectorAll(".quickChat");
 canvas.width = PADDING*2 + CELL*(SIZE-1);
 canvas.height = PADDING*2 + CELL*(SIZE-1);
 
-// 快捷聊天
 quickBtns.forEach(btn=>{
   btn.addEventListener("click",()=>{
     if(!myChess) return;
@@ -118,7 +123,7 @@ quickBtns.forEach(btn=>{
       chats.push(`${name}${text}`);
       if(chats.length>50) chats.shift();
       update(roomRef,{chats:chats});
-    });
+    }).catch(e=>console.log(e));
   });
 });
 
@@ -140,11 +145,7 @@ function drawAll(){
   for(let y=0;y<SIZE;y++){
     for(let x=0;x<SIZE;x++){
       const p = board[y][x];
-      if(!p) continue;
-      const cx = PADDING + x*CELL;
-      const cy = PADDING + y*CELL;
-      ctx.beginPath();
- function checkWin(x,y,player){
+      if(!p) contfunction checkWin(x,y,player){
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   for(let [dx,dy] of dirs){
     let cnt=1;
@@ -185,7 +186,6 @@ function startCountdown(){
   }, 500);
 }
 
-// 落子（兼容触屏+鼠标）
 function handleMove(e){
   e.preventDefault();
   if(gameOver || !myChess) return;
@@ -261,15 +261,15 @@ undoBtn.addEventListener("click",async ()=>{
   }
 });
 
-// 【核心修复】可靠加入房间逻辑
+// 可靠加入房间
 async function joinRoom(){
   try{
-    hallTip.innerText = "正在加入房间...";
+    hallTip.innerText = "正在读取房间数据...";
     const snap = await get(roomRef);
     let room = snap.val();
 
-    // 房间不存在，先初始化
     if(!room){
+      hallTip.innerText = "正在创建房间...";
       room = {
         p1:false, p2:false,
         ready1:false, ready2:false,
@@ -283,7 +283,6 @@ async function joinRoom(){
       await set(roomRef, room);
     }
 
-    // 占座位
     if(!room.p1){
       playerIndex = 1;
       await update(roomRef, {p1:true});
@@ -291,11 +290,10 @@ async function joinRoom(){
       playerIndex = 2;
       await update(roomRef, {p2:true});
     }else{
-      alert("房间已满，请稍后刷新重试！");
+      hallTip.innerText = "房间已满，请稍后刷新重试";
       return false;
     }
 
-    // 设置断线自动离开
     const field = playerIndex===1 ? "p1" : "p2";
     onDisconnect(roomRef.child(field)).set(false);
     
@@ -304,12 +302,11 @@ async function joinRoom(){
 
   }catch(err){
     console.error(err);
-    hallTip.innerText = "连接失败，请刷新页面重试";
+    hallTip.innerText = "连接失败："+err.message;
     return false;
   }
 }
 
-// 点击准备
 startBtn.addEventListener("click",async ()=>{
   if(playerIndex===0) return;
   const key = playerIndex===1 ? "ready1" : "ready2";
@@ -327,7 +324,6 @@ function listenRoom(){
     renderChat();
     drawAll();
 
-    // 有人退出 → 重置回大厅
     if(!data.p1 || !data.p2){
       clearInterval(countdownTimer);
       countdownText.innerText="";
@@ -343,7 +339,6 @@ function listenRoom(){
       return;
     }
 
-    // 两人都在
     hallDom.style.display="block";
     gameDom.style.display="none";
     startBtn.style.display="block";
@@ -362,7 +357,6 @@ function listenRoom(){
       startBtn.disabled = false;
     }
 
-    // 双方都准备 + 没开局 → 随机分配黑白
     if(data.ready1 && data.ready2 && !data.gameStart){
       const rand = Math.random() > 0.5;
       update(roomRef,{
@@ -373,7 +367,6 @@ function listenRoom(){
       return;
     }
 
-    // 正式对局
     if(data.gameStart){
       hallDom.style.display="none";
       gameDom.style.display="block";
@@ -406,7 +399,6 @@ restartBtn.addEventListener("click",async ()=>{
   });
 });
 
-// 启动顺序：先监听，再加入
 async function init(){
   listenRoom();
   await joinRoom();
