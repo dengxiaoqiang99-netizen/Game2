@@ -8,7 +8,9 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#222;color:#fff;font-family:system-ui;text-align:center;padding:10px;}
 .container{max-width:460px;margin:0 auto;}
-#matchTip{font-size:20px;color:#ffdd44;margin:20px 0;}
+#hall{margin-top:30px;}
+#hallTip{font-size:20px;color:#ffdd44;margin:10px 0;}
+#startBtn{display:none;margin:15px auto;font-size:18px;padding:10px 30px;}
 #game{display:none;}
 #status{font-size:18px;margin:6px 0;color:#8cf;min-height:24px;}
 #countdown{font-size:20px;color:#ff6666;font-weight:bold;margin:4px 0;}
@@ -24,7 +26,11 @@ button:disabled{background:#666;color:#aaa;}
 <body>
 <div class="container">
 <h1>🎮 联机五子棋</h1>
-<div id="matchTip">正在匹配对手，请稍候...</div>
+
+<div id="hall">
+<div id="hallTip">正在等待对手进入...</div>
+<button id="startBtn">开始对局</button>
+</div>
 
 <div id="game">
 <div id="status">等待数据加载...</div>
@@ -68,8 +74,8 @@ const SIZE = 15;
 const CELL = 26;
 const PADDING = 14;
 const TIME_LIMIT = 20;
-let role = null;
-let gameRef = ref(db,"global/room");
+let myRole = null;
+let roomRef = ref(db,"global/room");
 let board = Array(SIZE).fill().map(()=>Array(SIZE).fill(0));
 let turn = 1;
 let gameOver = false;
@@ -78,7 +84,9 @@ let countdownTimer = null;
 let lastBoard = null;
 let chatList = [];
 
-const matchTip = document.getElementById("matchTip");
+const hallDom = document.getElementById("hall");
+const hallTip = document.getElementById("hallTip");
+const startBtn = document.getElementById("startBtn");
 const gameDom = document.getElementById("game");
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
@@ -96,13 +104,13 @@ canvas.height = PADDING*2 + CELL*(SIZE-1);
 quickBtns.forEach(btn=>{
   btn.onclick = ()=>{
     const text = btn.innerText;
-    const name = role === "black" ? "【黑棋】" : "【白棋】";
-    get(gameRef).then(snap=>{
+    const name = myRole === "black" ? "【黑棋】" : "【白棋】";
+    get(roomRef).then(snap=>{
       const data = snap.val();
       let chats = data.chats || [];
       chats.push(`${name}${text}`);
       if(chats.length>50) chats.shift();
-      update(gameRef,{chats:chats});
+      update(roomRef,{chats:chats});
     });
   }
 });
@@ -170,7 +178,7 @@ function startCountdown(){
       clearInterval(countdownTimer);
       if(!gameOver){
         const nextTurn = turn === 1 ? 2 : 1;
-        update(gameRef,{
+        update(roomRef,{
           turn: nextTurn,
           turnStart: Date.now()
         });
@@ -193,21 +201,21 @@ canvas.addEventListener("touchend",e=>{
   const y = Math.round((my-PADDING)/CELL);
   if(x<0||x>=SIZE||y<0||y>=SIZE) return;
   if(board[y][x]!==0) return;
-  const mySide = role==="black"?1:2;
-  if(turn !== mySide){
+  const mySideNum = myRole==="black"?1:2;
+  if(turn !== mySideNum){
     statusText.innerText="不是你的回合！";
     return;
   }
   lastBoard = JSON.parse(JSON.stringify(board));
-  board[y][x] = mySide;
-  const win = checkWin(x,y,mySide);
+  board[y][x] = mySideNum;
+  const win = checkWin(x,y,mySideNum);
   const nextTurn = turn===1 ? 2 :1;
-  update(gameRef,{
+  update(roomRef,{
     board:board,
     turn:nextTurn,
     turnStart: Date.now(),
     over:win,
-    winner: win ? mySide : 0,
+    winner: win ? mySideNum : 0,
     lastBoard: lastBoard
   });
 });
@@ -220,71 +228,75 @@ function renderChat(){
 sendChatBtn.onclick = ()=>{
   const text = chatInput.value.trim();
   if(!text) return;
-  const name = role === "black" ? "【黑棋】" : "【白棋】";
-  get(gameRef).then(snap=>{
+  const name = myRole === "black" ? "【黑棋】" : "【白棋】";
+  get(roomRef).then(snap=>{
     const data = snap.val();
     let chats = data.chats || [];
     chats.push(`${name}${text}`);
     if(chats.length>50) chats.shift();
-    update(gameRef,{chats:chats});
+    update(roomRef,{chats:chats});
   });
   chatInput.value="";
 };
 
 undoBtn.onclick = async ()=>{
-  const snap = await get(gameRef);
+  const snap = await get(roomRef);
   const data = snap.val();
   if(!data.lastBoard){
     alert("暂无步骤可以悔棋");
     return;
   }
   if(confirm("向对手发起悔棋请求？")){
-    const name = role === "black" ? "【黑棋】" : "【白棋】";
-    get(gameRef).then(s=>{
+    const name = myRole === "black" ? "【黑棋】" : "【白棋】";
+    get(roomRef).then(s=>{
       const d = s.val();
       let chats = d.chats||[];
       chats.push(`${name} 请求悔棋，请对手确认！`);
-      update(gameRef,{chats});
+      update(roomRef,{chats});
     });
   }
 };
 
-// 使用事务原子抢占玩家位置，解决并发卡死
-async function joinGame(){
-  await runTransaction(gameRef,(data)=>{
-    let room = data.val();
+// 加入房间，登记玩家
+async function joinRoom(){
+  await runTransaction(roomRef, snap=>{
+    let room = snap.val();
     if(!room){
       room = {
-        player1:null,player2:null,
+        p1:null,p2:null,ready1:false,ready2:false,gameStart:false,
         board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
         turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
       };
     }
-    if(!room.player1){
-      room.player1 = "black";
-      role = "black";
-      // 设置断线自动清空自己
-      onDisconnect(gameRef.child("player1")).set(null);
-    }else if(!room.player2){
-      room.player2 = "white";
-      role = "white";
-      onDisconnect(gameRef.child("player2")).set(null);
+    if(!room.p1){
+      room.p1 = true;
+      onDisconnect(roomRef.child("p1")).set(null);
+    }else if(!room.p2){
+      room.p2 = true;
+      onDisconnect(roomRef.child("p2")).set(null);
     }else{
-      // 房间已满
       return undefined;
     }
-    data.set(room);
+    snap.set(room);
     return room;
-  }).catch(err=>{
-    console.error("匹配失败",err);
-    alert("对局已满，刷新重试！");
+  }).catch(()=>{
+    alert("房间已满，请刷新等待！");
     location.reload();
   });
 }
+
+// 点击准备
+startBtn.onclick = async ()=>{
+  const snap = await get(roomRef);
+  const r = snap.val();
+  if(!r.p1 || !r.p2) return;
+  if(r.p1 && !r.ready1) await update(roomRef,{ready1:true});
+  else if(r.p2 && !r.ready2) await update(roomRef,{ready2:true});
+};
 function listenRoom(){
-  onValue(gameRef,snap=>{
+  onValue(roomRef, async snap=>{
     const data = snap.val();
-    if(!data) {
+    if(!data){
       location.reload();
       return;
     }
@@ -295,49 +307,64 @@ function listenRoom(){
     renderChat();
     drawAll();
 
-    // 任意玩家离线，回到匹配界面
-    if(!data.player1 || !data.player2){
+    // 任意一人退出 → 重置全部状态
+    if(!data.p1 || !data.p2){
       clearInterval(countdownTimer);
       countdownText.innerText="";
-      matchTip.style.display="block";
+      hallDom.style.display="block";
       gameDom.style.display="none";
-      matchTip.innerText="对手已退出，等待新玩家加入...";
+      startBtn.style.display="none";
+      hallTip.innerText="等待对手进入房间...";
+      myRole = null;
       return;
     }
 
-    matchTip.style.display="none";
-    gameDom.style.display="block";
+    hallDom.style.display="block";
+    gameDom.style.display="none";
+    hallTip.innerText="两名玩家已就位";
+    startBtn.style.display="block";
 
-    if(gameOver){
-      clearInterval(countdownTimer);
-      countdownText.innerText="";
-      if(data.winner===1) statusText.innerText="🏆 黑棋胜利！";
-      else statusText.innerText="🏆 白棋胜利！";
-    }else{
-      if(turn===1) statusText.innerText="当前：黑棋落子";
-      else statusText.innerText="当前：白棋落子";
-      turnStartTime = data.turnStart;
-      startCountdown();
+    // 双方都点击准备 → 随机分配黑白，正式开局
+    if(data.ready1 && data.ready2 && !data.gameStart){
+      const rand = Math.random()>0.5;
+      await update(roomRef,{
+        gameStart:true,
+        assignP1: rand ? "black":"white",
+        assignP2: rand ? "white":"black"
+      });
+    }
+
+    // 对局正式开始
+    if(data.gameStart){
+      hallDom.style.display="none";
+      gameDom.style.display="block";
+      if(data.p1) myRole = data.assignP1;
+      if(data.p2) myRole = data.assignP2;
+
+      if(gameOver){
+        clearInterval(countdownTimer);
+        countdownText.innerText="";
+        statusText.innerText = data.winner===1 ? "🏆黑棋胜利" : "🏆白棋胜利";
+      }else{
+        statusText.innerText = turn===1 ? "当前：黑棋落子" : "当前：白棋落子";
+        turnStartTime = data.turnStart;
+        startCountdown();
+      }
     }
   });
 }
 
 restartBtn.onclick = async ()=>{
   clearInterval(countdownTimer);
-  await update(gameRef,{
+  await update(roomRef,{
+    ready1:false,ready2:false,gameStart:false,
     board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-    turn:1,
-    turnStart: Date.now(),
-    over:false,
-    winner:0,
-    chats:[],
-    lastBoard:null
+    turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
   });
 };
 
-// 启动流程
 async function init(){
-  await joinGame();
+  await joinRoom();
   listenRoom();
 }
 
