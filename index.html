@@ -12,6 +12,7 @@ body{background:#222;color:#fff;font-family:system-ui;text-align:center;padding:
 #hallTip{font-size:20px;color:#ffdd44;margin:10px 0;}
 #startBtn{display:none;margin:15px auto;font-size:18px;padding:10px 30px;}
 #game{display:none;}
+#myRole{font-size:16px;color:#ffd066;margin:4px 0;}
 #status{font-size:18px;margin:6px 0;color:#8cf;min-height:24px;}
 #countdown{font-size:20px;color:#ff6666;font-weight:bold;margin:4px 0;}
 canvas{background:#deb870;border-radius:6px;margin:6px auto;touch-action:none;}
@@ -29,11 +30,12 @@ button:disabled{background:#666;color:#aaa;}
 
 <div id="hall">
 <div id="hallTip">正在等待对手进入...</div>
-<button id="startBtn">开始对局</button>
+<button id="startBtn">准备开始</button>
 </div>
 
 <div id="game">
-<div id="status">等待数据加载...</div>
+<div id="myRole"></div>
+<div id="status">等待对局开始...</div>
 <div id="countdown"></div>
 <canvas id="board"></canvas>
 <div class="btn-group">
@@ -74,7 +76,8 @@ const SIZE = 15;
 const CELL = 26;
 const PADDING = 14;
 const TIME_LIMIT = 20;
-let myRole = null;
+let playerIndex = 0; // 1=玩家1 2=玩家2
+let myChess = null; // black / white
 let roomRef = ref(db,"global/room");
 let board = Array(SIZE).fill().map(()=>Array(SIZE).fill(0));
 let turn = 1;
@@ -88,6 +91,7 @@ const hallDom = document.getElementById("hall");
 const hallTip = document.getElementById("hallTip");
 const startBtn = document.getElementById("startBtn");
 const gameDom = document.getElementById("game");
+const myRoleText = document.getElementById("myRole");
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 const statusText = document.getElementById("status");
@@ -98,13 +102,16 @@ const sendChatBtn = document.getElementById("sendChatBtn");
 const undoBtn = document.getElementById("undoBtn");
 const restartBtn = document.getElementById("restartBtn");
 const quickBtns = document.querySelectorAll(".quickChat");
+
 canvas.width = PADDING*2 + CELL*(SIZE-1);
 canvas.height = PADDING*2 + CELL*(SIZE-1);
 
+// 快捷聊天
 quickBtns.forEach(btn=>{
-  btn.onclick = ()=>{
+  btn.addEventListener("click",()=>{
+    if(!myChess) return;
     const text = btn.innerText;
-    const name = myRole === "black" ? "【黑棋】" : "【白棋】";
+    const name = myChess === "black" ? "【黑棋】" : "【白棋】";
     get(roomRef).then(snap=>{
       const data = snap.val();
       let chats = data.chats || [];
@@ -112,7 +119,7 @@ quickBtns.forEach(btn=>{
       if(chats.length>50) chats.shift();
       update(roomRef,{chats:chats});
     });
-  }
+  });
 });
 
 function drawAll(){
@@ -137,18 +144,6 @@ function drawAll(){
       const cx = PADDING + x*CELL;
       const cy = PADDING + y*CELL;
       ctx.beginPath();
-      ctx.arc(cx,cy,CELL*0.42,0,Math.PI*2);
-      if(p===1){
-        ctx.fillStyle="#000";
-      }else{
-        ctx.fillStyle="#fff";
-        ctx.strokeStyle="#777";
-        ctx.stroke();
-      }
-      ctx.fill();
-    }
-  }
-}
 function checkWin(x,y,player){
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   for(let [dx,dy] of dirs){
@@ -190,18 +185,28 @@ function startCountdown(){
   }, 500);
 }
 
-canvas.addEventListener("touchend",e=>{
+// 落子（兼容触屏+鼠标点击）
+function handleMove(e){
   e.preventDefault();
-  if(gameOver) return;
+  if(gameOver || !myChess) return;
   const rect = canvas.getBoundingClientRect();
-  const touch = e.changedTouches[0];
-  const mx = touch.clientX - rect.left;
-  const my = touch.clientY - rect.top;
+  let mx, my;
+  if(e.touches && e.touches[0]){
+    mx = e.touches[0].clientX - rect.left;
+    my = e.touches[0].clientY - rect.top;
+  }else if(e.changedTouches && e.changedTouches[0]){
+    mx = e.changedTouches[0].clientX - rect.left;
+    my = e.changedTouches[0].clientY - rect.top;
+  }else{
+    mx = e.clientX - rect.left;
+    my = e.clientY - rect.top;
+  }
   const x = Math.round((mx-PADDING)/CELL);
   const y = Math.round((my-PADDING)/CELL);
   if(x<0||x>=SIZE||y<0||y>=SIZE) return;
   if(board[y][x]!==0) return;
-  const mySideNum = myRole==="black"?1:2;
+  
+  const mySideNum = myChess==="black"?1:2;
   if(turn !== mySideNum){
     statusText.innerText="不是你的回合！";
     return;
@@ -218,17 +223,19 @@ canvas.addEventListener("touchend",e=>{
     winner: win ? mySideNum : 0,
     lastBoard: lastBoard
   });
-});
+}
+canvas.addEventListener("touchend",handleMove);
+canvas.addEventListener("click",handleMove);
 
 function renderChat(){
   chatBox.innerHTML = chatList.map(item=>`<div>${item}</div>`).join("");
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-sendChatBtn.onclick = ()=>{
+sendChatBtn.addEventListener("click",()=>{
   const text = chatInput.value.trim();
-  if(!text) return;
-  const name = myRole === "black" ? "【黑棋】" : "【白棋】";
+  if(!text || !myChess) return;
+  const name = myChess === "black" ? "【黑棋】" : "【白棋】";
   get(roomRef).then(snap=>{
     const data = snap.val();
     let chats = data.chats || [];
@@ -237,9 +244,9 @@ sendChatBtn.onclick = ()=>{
     update(roomRef,{chats:chats});
   });
   chatInput.value="";
-};
+});
 
-undoBtn.onclick = async ()=>{
+undoBtn.addEventListener("click",async ()=>{
   const snap = await get(roomRef);
   const data = snap.val();
   if(!data.lastBoard){
@@ -247,7 +254,7 @@ undoBtn.onclick = async ()=>{
     return;
   }
   if(confirm("向对手发起悔棋请求？")){
-    const name = myRole === "black" ? "【黑棋】" : "【白棋】";
+    const name = myChess === "black" ? "【黑棋】" : "【白棋】";
     get(roomRef).then(s=>{
       const d = s.val();
       let chats = d.chats||[];
@@ -255,59 +262,71 @@ undoBtn.onclick = async ()=>{
       update(roomRef,{chats});
     });
   }
-};
+});
 
-// 加入房间，登记玩家
+// 原子加入房间（修复版事务）
 async function joinRoom(){
-  await runTransaction(roomRef, snap=>{
-    let room = snap.val();
-    if(!room){
-      room = {
-        p1:null,p2:null,ready1:false,ready2:false,gameStart:false,
-        board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-        turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
-      };
-    }
-    if(!room.p1){
-      room.p1 = true;
-      onDisconnect(roomRef.child("p1")).set(null);
-    }else if(!room.p2){
-      room.p2 = true;
-      onDisconnect(roomRef.child("p2")).set(null);
-    }else{
-      return undefined;
-    }
-    snap.set(room);
-    return room;
-  }).catch(()=>{
-    alert("房间已满，请刷新等待！");
-    location.reload();
-  });
-}
-
-// 点击准备
-startBtn.onclick = async ()=>{
-  const snap = await get(roomRef);
-  const r = snap.val();
-  if(!r.p1 || !r.p2) return;
-  if(r.p1 && !r.ready1) await update(roomRef,{ready1:true});
-  else if(r.p2 && !r.ready2) await update(roomRef,{ready2:true});
-};
-function listenRoom(){
-  onValue(roomRef, async snap=>{
-    const data = snap.val();
-    if(!data){
+  try{
+    const res = await runTransaction(roomRef, room=>{
+      if(!room){
+        room = {
+          p1:false, p2:false,
+          ready1:false, ready2:false,
+          gameStart:false,
+          chess1:"", chess2:"",
+          board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
+          turn:1, turnStart:Date.now(),
+          over:false, winner:0,
+          chats:[], lastBoard:null
+        };
+      }
+      if(!room.p1){
+        room.p1 = true;
+        playerIndex = 1;
+      }else if(!room.p2){
+        room.p2 = true;
+        playerIndex = 2;
+      }else{
+        return; // 房间满
+      }
+      return room;
+    });
+    
+    if(!res.committed){
+      alert("房间已满，请刷新等待！");
       location.reload();
       return;
     }
-    board = data.board;
-    turn = data.turn;
-    gameOver = data.over;
+    
+    // 设置断线自动离开
+    const field = playerIndex===1 ? "p1" : "p2";
+    onDisconnect(roomRef.child(field)).set(false);
+    
+  }catch(err){
+    console.error("加入房间失败",err);
+    alert("连接失败，请刷新重试");
+  }
+}
+
+// 点击准备
+startBtn.addEventListener("click",async ()=>{
+  if(playerIndex===0) return;
+  const key = playerIndex===1 ? "ready1" : "ready2";
+  await update(roomRef,{[key]:true});
+});
+function listenRoom(){
+  onValue(roomRef, async snap=>{
+    const data = snap.val();
+    if(!data) return;
+    
+    board = data.board || [];
+    turn = data.turn || 1;
+    gameOver = data.over || false;
     chatList = data.chats || [];
     renderChat();
     drawAll();
 
-    // 任意一人退出 → 重置全部状态
+    // 有人退出 → 重置回大厅
     if(!data.p1 || !data.p2){
       clearInterval(countdownTimer);
       countdownText.innerText="";
@@ -315,36 +334,52 @@ function listenRoom(){
       gameDom.style.display="none";
       startBtn.style.display="none";
       hallTip.innerText="等待对手进入房间...";
-      myRole = null;
+      myChess = null;
       return;
     }
 
+    // 两人都在，显示准备按钮
     hallDom.style.display="block";
     gameDom.style.display="none";
-    hallTip.innerText="两名玩家已就位";
     startBtn.style.display="block";
-
-    // 双方都点击准备 → 随机分配黑白，正式开局
-    if(data.ready1 && data.ready2 && !data.gameStart){
-      const rand = Math.random()>0.5;
-      await update(roomRef,{
-        gameStart:true,
-        assignP1: rand ? "black":"white",
-        assignP2: rand ? "white":"black"
-      });
+    
+    const meReady = playerIndex===1 ? data.ready1 : data.ready2;
+    const otherReady = playerIndex===1 ? data.ready2 : data.ready1;
+    
+    if(meReady && otherReady){
+      hallTip.innerText="双方已准备，对局即将开始...";
+      startBtn.style.display="none";
+    }else if(meReady){
+      hallTip.innerText="你已准备，等待对手准备...";
+      startBtn.disabled = true;
+    }else{
+      hallTip.innerText="两名玩家已就位，点击准备开始";
+      startBtn.disabled = false;
     }
 
-    // 对局正式开始
+    // 双方都准备 + 还没开局 → 随机分配黑白，启动对局
+    if(data.ready1 && data.ready2 && !data.gameStart){
+      const rand = Math.random() > 0.5;
+      await update(roomRef,{
+        gameStart:true,
+        chess1: rand ? "black" : "white",
+        chess2: rand ? "white" : "black"
+      });
+      return;
+    }
+
+    // 正式对局
     if(data.gameStart){
       hallDom.style.display="none";
       gameDom.style.display="block";
-      if(data.p1) myRole = data.assignP1;
-      if(data.p2) myRole = data.assignP2;
+      
+      myChess = playerIndex===1 ? data.chess1 : data.chess2;
+      myRoleText.innerText = `你执：${myChess==="black"?"黑棋⚫":"白棋⚪"}`;
 
       if(gameOver){
         clearInterval(countdownTimer);
         countdownText.innerText="";
-        statusText.innerText = data.winner===1 ? "🏆黑棋胜利" : "🏆白棋胜利";
+        statusText.innerText = data.winner===1 ? "🏆 黑棋胜利！" : "🏆 白棋胜利！";
       }else{
         statusText.innerText = turn===1 ? "当前：黑棋落子" : "当前：白棋落子";
         turnStartTime = data.turnStart;
@@ -354,15 +389,19 @@ function listenRoom(){
   });
 }
 
-restartBtn.onclick = async ()=>{
+restartBtn.addEventListener("click",async ()=>{
   clearInterval(countdownTimer);
   await update(roomRef,{
-    ready1:false,ready2:false,gameStart:false,
+    ready1:false, ready2:false, gameStart:false,
+    chess1:"", chess2:"",
     board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-    turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
+    turn:1, turnStart:Date.now(),
+    over:false, winner:0,
+    chats:[], lastBoard:null
   });
-};
+});
 
+// 启动
 async function init(){
   await joinRoom();
   listenRoom();
