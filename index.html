@@ -254,6 +254,14 @@ function listenRoom(){
     renderChat();
     drawAll();
 
+    // 核心改动：缺少任意一名玩家，停止计时器
+    if(!data.player1 || !data.player2){
+      clearInterval(countdownTimer);
+      countdownText.innerText="⏳ 等待第二名玩家加入...";
+      statusText.innerText="等待对手就位";
+      return;
+    }
+
     if(gameOver){
       clearInterval(countdownTimer);
       countdownText.innerText="";
