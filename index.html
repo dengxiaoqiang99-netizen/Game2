@@ -49,7 +49,7 @@ button:disabled{background:#666;color:#aaa;}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, update, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, set, update, onValue, get, runTransaction, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEuVLSVMc9sAgfeZeNHwR88FAaBW0yEpY",
@@ -249,33 +249,37 @@ undoBtn.onclick = async ()=>{
   }
 };
 
-// 初始化房间，没人则创建空房间
-async function initRoom(){
-  const snap = await get(gameRef);
-  let data = snap.val();
-  if(!data){
-    await set(gameRef,{
-      player1:null,player2:null,
-      board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-      turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
-    });
-  }
-  joinGame();
-}
-
+// 使用事务原子抢占玩家位置，解决并发卡死
 async function joinGame(){
-  const snap = await get(gameRef);
-  const data = snap.val();
-  if(!data.player1){
-    role = "black";
-    await update(gameRef,{player1:"black"});
-  }else if(!data.player2){
-    role = "white";
-    await update(gameRef,{player2:"white"});
-  }else{
-    alert("对局已满，请稍后刷新重试！");
+  await runTransaction(gameRef,(data)=>{
+    let room = data.val();
+    if(!room){
+      room = {
+        player1:null,player2:null,
+        board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
+        turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
+      };
+    }
+    if(!room.player1){
+      room.player1 = "black";
+      role = "black";
+      // 设置断线自动清空自己
+      onDisconnect(gameRef.child("player1")).set(null);
+    }else if(!room.player2){
+      room.player2 = "white";
+      role = "white";
+      onDisconnect(gameRef.child("player2")).set(null);
+    }else{
+      // 房间已满
+      return undefined;
+    }
+    data.set(room);
+    return room;
+  }).catch(err=>{
+    console.error("匹配失败",err);
+    alert("对局已满，刷新重试！");
     location.reload();
-  }
+  });
 }
 function listenRoom(){
   onValue(gameRef,snap=>{
@@ -291,7 +295,7 @@ function listenRoom(){
     renderChat();
     drawAll();
 
-    // 任意一方离开，重置对局
+    // 任意玩家离线，回到匹配界面
     if(!data.player1 || !data.player2){
       clearInterval(countdownTimer);
       countdownText.innerText="";
@@ -301,7 +305,6 @@ function listenRoom(){
       return;
     }
 
-    // 双方齐全，进入对局界面
     matchTip.style.display="none";
     gameDom.style.display="block";
 
@@ -311,35 +314,34 @@ function listenRoom(){
       if(data.winner===1) statusText.innerText="🏆 黑棋胜利！";
       else statusText.innerText="🏆 白棋胜利！";
     }else{
-      statusText.innerText="对局准备开始";
-      turnStartTime = data.turnStart;
-      startCountdown();
       if(turn===1) statusText.innerText="当前：黑棋落子";
       else statusText.innerText="当前：白棋落子";
+      turnStartTime = data.turnStart;
+      startCountdown();
     }
   });
 }
 
 restartBtn.onclick = async ()=>{
   clearInterval(countdownTimer);
-  await set(gameRef,{
-    player1:"black",player2:"white",
+  await update(gameRef,{
     board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-    turn:1,turnStart:Date.now(),over:false,winner:0,chats:[],lastBoard:null
+    turn:1,
+    turnStart: Date.now(),
+    over:false,
+    winner:0,
+    chats:[],
+    lastBoard:null
   });
 };
 
-window.addEventListener("beforeunload",async ()=>{
-  if(role==="black") update(gameRef,{player1:null});
-  if(role==="white") update(gameRef,{player2:null});
-});
+// 启动流程
+async function init(){
+  await joinGame();
+  listenRoom();
+}
 
-document.addEventListener("visibilitychange",async ()=>{
-  if(document.hidden) return;
-});
-
-initRoom();
-listenRoom();
+init();
 drawAll();
 </script>
 </body>
