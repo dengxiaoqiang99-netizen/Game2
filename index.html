@@ -1,42 +1,335 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>TGame</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>远程联机五子棋</title>
 <style>
-body{
-  margin:0;
-  background:#111;
-  color:white;
-  text-align:center;
-  font-family:sans-serif;
-}
-h1{
-  margin-top:50px;
-}
-button{
-  padding:15px 30px;
-  font-size:20px;
-  border-radius:10px;
-}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#222;color:#fff;font-family:system-ui;text-align:center;padding:10px;}
+.container{max-width:460px;margin:0 auto;}
+input{width:70%;padding:12px;font-size:16px;border-radius:8px;border:none;margin:8px 0;}
+button{padding:10px 12px;font-size:15px;border:none;border-radius:8px;background:#e6b349;color:#111;margin:4px;}
+button:disabled{background:#666;color:#aaa;}
+#login{margin:15px 0;}
+#game{display:none;}
+#status{font-size:18px;margin:6px 0;color:#8cf;min-height:24px;}
+#countdown{font-size:20px;color:#ff6666;font-weight:bold;margin:4px 0;}
+#roomInfo{margin:8px;font-size:16px;color:#ffd066;}
+canvas{background:#deb870;border-radius:6px;margin:6px auto;touch-action:none;}
+#chatBox{width:100%;height:120px;background:#333;text-align:left;padding:8px;overflow-y:auto;border-radius:6px;margin:8px 0;font-size:14px;}
+#chatInput{width:calc(100% - 90px);padding:8px;}
+#sendChatBtn{width:80px;padding:8px;}
 </style>
 </head>
-
 <body>
+<div class="container">
+<h1>🎮 联机五子棋</h1>
+<div id="login">
+<input id="roomInput" placeholder="6位房间号">
+<br>
+<button id="createBtn">创建房间（黑棋）</button>
+<button id="joinBtn">加入房间（白棋）</button>
+</div>
 
-<h1>🎮 TGame</h1>
+<div id="game">
+<div id="roomInfo"></div>
+<div id="status">等待数据加载...</div>
+<div id="countdown"></div>
+<canvas id="board"></canvas>
+<div>
+<button id="restartBtn">重新开局</button>
+<button id="undoBtn">请求悔棋</button>
+</div>
+<div id="chatBox"></div>
+<div style="display:flex;gap:6px;">
+<input id="chatInput" placeholder="输入消息">
+<button id="sendChatBtn">发送</button>
+</div>
+</div>
+</div>
 
-<p>双人诗词小游戏</p>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, update, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-<button onclick="startGame()">
-开始游戏
-</button>
+const firebaseConfig = {
+  apiKey: "AIzaSyDEuVLSVMc9sAgfeZeNHwR88FAaBW0yEpY",
+  authDomain: "game-eed02.firebaseapp.com",
+  databaseURL: "https://game-eed02-default-rtdb.firebaseio.com",
+  projectId: "game-eed02",
+  storageBucket: "game-eed02.firebasestorage.app",
+  messagingSenderId: "817508526856",
+  appId: "1:817508526856:web:5df14ea809f18c3ad41abd",
+  measurementId: "G-ZQRTLDL7Z6"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-<script>
-function startGame(){
- alert("游戏启动成功！");
+const SIZE = 15;
+const CELL = 26;
+const PADDING = 14;
+const TIME_LIMIT = 20;
+let roomId = "";
+let role = null;
+let gameRef = null;
+let board = Array(SIZE).fill().map(()=>Array(SIZE).fill(0));
+let turn = 1;
+let gameOver = false;
+let turnStartTime = Date.now();
+let countdownTimer = null;
+let lastBoard = null;
+let chatList = [];
+
+const loginDom = document.getElementById("login");
+const gameDom = document.getElementById("game");
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const statusText = document.getElementById("status");
+const countdownText = document.getElementById("countdown");
+const roomText = document.getElementById("roomInfo");
+const chatBox = document.getElementById("chatBox");
+const chatInput = document.getElementById("chatInput");
+const sendChatBtn = document.getElementById("sendChatBtn");
+const undoBtn = document.getElementById("undoBtn");
+const restartBtn = document.getElementById("restartBtn");
+canvas.width = PADDING*2 + CELL*(SIZE-1);
+canvas.height = PADDING*2 + CELL*(SIZE-1);
+
+function drawAll(){
+  ctx.fillStyle = "#deb870";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle="#333";
+  ctx.lineWidth=1;
+  for(let i=0;i<SIZE;i++){
+    ctx.beginPath();
+    ctx.moveTo(PADDING, PADDING+i*CELL);
+    ctx.lineTo(PADDING+(SIZE-1)*CELL, PADDING+i*CELL);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(PADDING+i*CELL, PADDING);
+    ctx.lineTo(PADDING+i*CELL, PADDING+(SIZE-1)*CELL);
+    ctx.stroke();
+  }
+  for(let y=0;y<SIZE;y++){
+    for(let x=0;x<SIZE;x++){
+      const p = board[y][x];
+      if(!p) continue;
+      const cx = PADDING + x*CELL;
+      const cy = PADDING + y*CELL;
+      ctx.beginPath();
+      ctx.arc(cx,cy,CELL*0.42,0,Math.PI*2);
+      if(p===1){
+        ctx.fillStyle="#000";
+      }else{
+        ctx.fillStyle="#fff";
+        ctx.strokeStyle="#777";
+        ctx.stroke();
+      }
+      ctx.fill();
+    }
+  }
 }
-</script>
+function checkWin(x,y,player){
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for(let [dx,dy] of dirs){
+    let cnt=1;
+    for(let i=1;i<5;i++){
+      const nx=x+dx*i; const ny=y+dy*i;
+      if(nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE&&board[ny][nx]===player) cnt++;
+      else break;
+    }
+    for(let i=1;i<5;i++){
+      const nx=x-dx*i; const ny=y-dy*i;
+      if(nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE&&board[ny][nx]===player) cnt++;
+      else break;
+    }
+    if(cnt>=5) return true;
+  }
+  return false;
+}
 
+function startCountdown(){
+  clearInterval(countdownTimer);
+  turnStartTime = Date.now();
+  countdownTimer = setInterval(()=>{
+    const passed = Math.floor((Date.now() - turnStartTime)/1000);
+    const remain = TIME_LIMIT - passed;
+    if(remain <= 0){
+      clearInterval(countdownTimer);
+      if(!gameOver){
+        const nextTurn = turn === 1 ? 2 : 1;
+        update(gameRef,{
+          turn: nextTurn,
+          turnStart: Date.now()
+        });
+        countdownText.innerText="⏱ 超时！自动切换回合";
+      }
+      return;
+    }
+    countdownText.innerText=`⏱ 剩余 ${remain} 秒落子`;
+  }, 500);
+}
+
+canvas.addEventListener("touchend",e=>{
+  e.preventDefault();
+  if(gameOver) return;
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.changedTouches[0];
+  const mx = touch.clientX - rect.left;
+  const my = touch.clientY - rect.top;
+  const x = Math.round((mx-PADDING)/CELL);
+  const y = Math.round((my-PADDING)/CELL);
+  if(x<0||x>=SIZE||y<0||y>=SIZE) return;
+  if(board[y][x]!==0) return;
+  const mySide = role==="black"?1:2;
+  if(turn !== mySide){
+    statusText.innerText="不是你的回合！";
+    return;
+  }
+  lastBoard = JSON.parse(JSON.stringify(board));
+  board[y][x] = mySide;
+  const win = checkWin(x,y,mySide);
+  const nextTurn = turn===1 ? 2 :1;
+  update(gameRef,{
+    board:board,
+    turn:nextTurn,
+    turnStart: Date.now(),
+    over:win,
+    winner: win ? mySide : 0,
+    lastBoard: lastBoard
+  });
+});
+
+function renderChat(){
+  chatBox.innerHTML = chatList.map(item=>`<div>${item}</div>`).join("");
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+sendChatBtn.onclick = ()=>{
+  const text = chatInput.value.trim();
+  if(!text) return;
+  const name = role === "black" ? "【黑棋】" : "【白棋】";
+  get(gameRef).then(snap=>{
+    const data = snap.val();
+    let chats = data.chats || [];
+    chats.push(`${name}${text}`);
+    if(chats.length>50) chats.shift();
+    update(gameRef,{chats:chats});
+  });
+  chatInput.value="";
+};
+
+undoBtn.onclick = async ()=>{
+  const snap = await get(gameRef);
+  const data = snap.val();
+  if(!data.lastBoard){
+    alert("暂无步骤可以悔棋");
+    return;
+  }
+  if(confirm("向对手发起悔棋请求？")){
+    const name = role === "black" ? "【黑棋】" : "【白棋】";
+    get(gameRef).then(s=>{
+      const d = s.val();
+      let chats = d.chats||[];
+      chats.push(`${name} 请求悔棋，请对手确认！`);
+      update(gameRef,{chats});
+    });
+  }
+};
+function listenRoom(){
+  if(gameRef) return;
+  gameRef = ref(db,"rooms/"+roomId);
+  onValue(gameRef,snap=>{
+    const data = snap.val();
+    if(!data) {
+      alert("房间已销毁！");
+      location.reload();
+      return;
+    }
+    board = data.board;
+    turn = data.turn;
+    gameOver = data.over;
+    chatList = data.chats || [];
+    renderChat();
+    drawAll();
+
+    if(gameOver){
+      clearInterval(countdownTimer);
+      countdownText.innerText="";
+      if(data.winner===1) statusText.innerText="🏆 黑棋胜利！";
+      else statusText.innerText="🏆 白棋胜利！";
+    }else{
+      if(turn===1) statusText.innerText="当前：黑棋落子";
+      else statusText.innerText="当前：白棋落子";
+      turnStartTime = data.turnStart;
+      startCountdown();
+    }
+  });
+}
+
+async function createRoom(){
+  let input = document.getElementById("roomInput").value.trim();
+  roomId = input || Math.floor(100000+Math.random()*900000).toString();
+  const check = await get(ref(db,"rooms/"+roomId));
+  if(check.exists()){
+    alert("房间已存在，换一个房间号");
+    return;
+  }
+  role = "black";
+  await set(ref(db,"rooms/"+roomId),{
+    player1:"black",
+    player2:null,
+    board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
+    turn:1,
+    turnStart: Date.now(),
+    over:false,
+    winner:0,
+    chats:[],
+    lastBoard:null
+  });
+  enterGame();
+  listenRoom();
+}
+
+async function joinRoom(){
+  roomId = document.getElementById("roomInput").value.trim();
+  if(!roomId){alert("输入房间号");return;}
+  const snap = await get(ref(db,"rooms/"+roomId));
+  if(!snap.exists()){alert("房间不存在");return;}
+  const data = snap.val();
+  if(data.player2){alert("房间已满");return;}
+  role = "white";
+  await update(ref(db,"rooms/"+roomId),{player2:"white"});
+  enterGame();
+  listenRoom();
+}
+
+function enterGame(){
+  loginDom.style.display="none";
+  gameDom.style.display="block";
+  roomText.innerText=`房间号：${roomId}｜你：${role==="black"?"黑棋":"白棋"}`;
+  drawAll();
+}
+
+restartBtn.onclick = async ()=>{
+  clearInterval(countdownTimer);
+  await set(ref(db,"rooms/"+roomId),{
+    player1:"black",
+    player2:"white",
+    board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
+    turn:1,
+    turnStart: Date.now(),
+    over:false,
+    winner:0,
+    chats:[],
+    lastBoard:null
+  });
+};
+
+document.getElementById("createBtn").onclick = createRoom;
+document.getElementById("joinBtn").onclick = joinRoom;
+drawAll();
+</script>
 </body>
 </html>
