@@ -9,7 +9,7 @@
 body{background:#222;color:#fff;font-family:system-ui;text-align:center;padding:10px;}
 .container{max-width:460px;margin:0 auto;}
 #hall{margin-top:30px;}
-#hallTip{font-size:20px;color:#ffdd44;margin:10px 0;}
+#hallTip{font-size:20px;color:#ffdd44;margin:10px 0;min-height:28px;}
 #startBtn{display:none;margin:15px auto;font-size:18px;padding:10px 30px;}
 #game{display:none;}
 #myRole{font-size:16px;color:#ffd066;margin:4px 0;}
@@ -29,7 +29,7 @@ button:disabled{background:#666;color:#aaa;}
 <h1>🎮 联机五子棋</h1>
 
 <div id="hall">
-<div id="hallTip">正在等待对手进入...</div>
+<div id="hallTip">正在连接服务器...</div>
 <button id="startBtn">准备开始</button>
 </div>
 
@@ -57,7 +57,7 @@ button:disabled{background:#666;color:#aaa;}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, update, onValue, get, runTransaction, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, set, update, onValue, get, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEuVLSVMc9sAgfeZeNHwR88FAaBW0yEpY",
@@ -144,7 +144,7 @@ function drawAll(){
       const cx = PADDING + x*CELL;
       const cy = PADDING + y*CELL;
       ctx.beginPath();
-function checkWin(x,y,player){
+ function checkWin(x,y,player){
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   for(let [dx,dy] of dirs){
     let cnt=1;
@@ -185,16 +185,13 @@ function startCountdown(){
   }, 500);
 }
 
-// 落子（兼容触屏+鼠标点击）
+// 落子（兼容触屏+鼠标）
 function handleMove(e){
   e.preventDefault();
   if(gameOver || !myChess) return;
   const rect = canvas.getBoundingClientRect();
   let mx, my;
-  if(e.touches && e.touches[0]){
-    mx = e.touches[0].clientX - rect.left;
-    my = e.touches[0].clientY - rect.top;
-  }else if(e.changedTouches && e.changedTouches[0]){
+  if(e.changedTouches && e.changedTouches[0]){
     mx = e.changedTouches[0].clientX - rect.left;
     my = e.changedTouches[0].clientY - rect.top;
   }else{
@@ -264,47 +261,51 @@ undoBtn.addEventListener("click",async ()=>{
   }
 });
 
-// 原子加入房间（修复版事务）
+// 【核心修复】可靠加入房间逻辑
 async function joinRoom(){
   try{
-    const res = await runTransaction(roomRef, room=>{
-      if(!room){
-        room = {
-          p1:false, p2:false,
-          ready1:false, ready2:false,
-          gameStart:false,
-          chess1:"", chess2:"",
-          board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-          turn:1, turnStart:Date.now(),
-          over:false, winner:0,
-          chats:[], lastBoard:null
-        };
-      }
-      if(!room.p1){
-        room.p1 = true;
-        playerIndex = 1;
-      }else if(!room.p2){
-        room.p2 = true;
-        playerIndex = 2;
-      }else{
-        return; // 房间满
-      }
-      return room;
-    });
-    
-    if(!res.committed){
-      alert("房间已满，请刷新等待！");
-      location.reload();
-      return;
+    hallTip.innerText = "正在加入房间...";
+    const snap = await get(roomRef);
+    let room = snap.val();
+
+    // 房间不存在，先初始化
+    if(!room){
+      room = {
+        p1:false, p2:false,
+        ready1:false, ready2:false,
+        gameStart:false,
+        chess1:"", chess2:"",
+        board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
+        turn:1, turnStart:Date.now(),
+        over:false, winner:0,
+        chats:[], lastBoard:null
+      };
+      await set(roomRef, room);
     }
-    
+
+    // 占座位
+    if(!room.p1){
+      playerIndex = 1;
+      await update(roomRef, {p1:true});
+    }else if(!room.p2){
+      playerIndex = 2;
+      await update(roomRef, {p2:true});
+    }else{
+      alert("房间已满，请稍后刷新重试！");
+      return false;
+    }
+
     // 设置断线自动离开
     const field = playerIndex===1 ? "p1" : "p2";
     onDisconnect(roomRef.child(field)).set(false);
     
+    hallTip.innerText = "你已加入，等待对手进入...";
+    return true;
+
   }catch(err){
-    console.error("加入房间失败",err);
-    alert("连接失败，请刷新重试");
+    console.error(err);
+    hallTip.innerText = "连接失败，请刷新页面重试";
+    return false;
   }
 }
 
@@ -315,7 +316,7 @@ startBtn.addEventListener("click",async ()=>{
   await update(roomRef,{[key]:true});
 });
 function listenRoom(){
-  onValue(roomRef, async snap=>{
+  onValue(roomRef, snap=>{
     const data = snap.val();
     if(!data) return;
     
@@ -333,12 +334,16 @@ function listenRoom(){
       hallDom.style.display="block";
       gameDom.style.display="none";
       startBtn.style.display="none";
-      hallTip.innerText="等待对手进入房间...";
+      if(playerIndex===0){
+        hallTip.innerText = "正在连接服务器...";
+      }else{
+        hallTip.innerText = "对手已退出，等待新玩家加入...";
+      }
       myChess = null;
       return;
     }
 
-    // 两人都在，显示准备按钮
+    // 两人都在
     hallDom.style.display="block";
     gameDom.style.display="none";
     startBtn.style.display="block";
@@ -347,20 +352,20 @@ function listenRoom(){
     const otherReady = playerIndex===1 ? data.ready2 : data.ready1;
     
     if(meReady && otherReady){
-      hallTip.innerText="双方已准备，对局即将开始...";
+      hallTip.innerText = "双方已准备，对局即将开始...";
       startBtn.style.display="none";
     }else if(meReady){
-      hallTip.innerText="你已准备，等待对手准备...";
+      hallTip.innerText = "你已准备，等待对手准备...";
       startBtn.disabled = true;
     }else{
-      hallTip.innerText="两名玩家已就位，点击准备开始";
+      hallTip.innerText = "两名玩家已就位，点击准备开始";
       startBtn.disabled = false;
     }
 
-    // 双方都准备 + 还没开局 → 随机分配黑白，启动对局
+    // 双方都准备 + 没开局 → 随机分配黑白
     if(data.ready1 && data.ready2 && !data.gameStart){
       const rand = Math.random() > 0.5;
-      await update(roomRef,{
+      update(roomRef,{
         gameStart:true,
         chess1: rand ? "black" : "white",
         chess2: rand ? "white" : "black"
@@ -401,10 +406,10 @@ restartBtn.addEventListener("click",async ()=>{
   });
 });
 
-// 启动
+// 启动顺序：先监听，再加入
 async function init(){
-  await joinRoom();
   listenRoom();
+  await joinRoom();
 }
 
 init();
