@@ -3,409 +3,2038 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+
 <title>联机五子棋</title>
+
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:#222;color:#fff;font-family:system-ui;text-align:center;padding:10px;}
-.container{max-width:460px;margin:0 auto;}
-#hall{margin-top:30px;}
-#hallTip{font-size:18px;color:#ffdd44;margin:10px 0;min-height:28px;word-break:break-all;}
-#startBtn{display:none;margin:15px auto;font-size:18px;padding:10px 30px;}
-#game{display:none;}
-#myRole{font-size:16px;color:#ffd066;margin:4px 0;}
-#status{font-size:18px;margin:6px 0;color:#8cf;min-height:24px;}
-#countdown{font-size:20px;color:#ff6666;font-weight:bold;margin:4px 0;}
-canvas{background:#deb870;border-radius:6px;margin:6px auto;touch-action:none;}
-#chatBox{width:100%;height:120px;background:#333;text-align:left;padding:8px;overflow-y:auto;border-radius:6px;margin:8px 0;font-size:14px;}
-.btn-group{margin:6px 0;}
-button{padding:8px 10px;font-size:14px;border:none;border-radius:8px;background:#e6b349;color:#111;margin:3px;}
-button:disabled{background:#666;color:#aaa;}
-#chatInput{width:calc(100% - 90px);padding:8px;}
-#sendChatBtn{width:80px;padding:8px;}
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+}
+
+body{
+    background:#222;
+    color:#fff;
+    font-family:system-ui;
+    text-align:center;
+    padding:10px;
+}
+
+.container{
+    max-width:460px;
+    margin:0 auto;
+}
+
+#hall{
+    margin-top:30px;
+}
+
+#hallTip{
+    font-size:18px;
+    color:#ffdd44;
+    margin:10px 0;
+    min-height:28px;
+    word-break:break-all;
+}
+
+#startBtn{
+    display:none;
+    margin:15px auto;
+    font-size:18px;
+    padding:10px 30px;
+}
+
+#game{
+    display:none;
+}
+
+#myRole{
+    font-size:16px;
+    color:#ffd066;
+    margin:4px 0;
+}
+
+#status{
+    font-size:18px;
+    margin:6px 0;
+    color:#8cf;
+    min-height:24px;
+}
+
+#countdown{
+    font-size:20px;
+    color:#ff6666;
+    font-weight:bold;
+    margin:4px 0;
+}
+
+canvas{
+    background:#deb870;
+    border-radius:6px;
+    margin:6px auto;
+    touch-action:none;
+    display:block;
+}
+
+#chatBox{
+    width:100%;
+    height:120px;
+    background:#333;
+    text-align:left;
+    padding:8px;
+    overflow-y:auto;
+    border-radius:6px;
+    margin:8px 0;
+    font-size:14px;
+}
+
+.btn-group{
+    margin:6px 0;
+}
+
+button{
+    padding:8px 10px;
+    font-size:14px;
+    border:none;
+    border-radius:8px;
+    background:#e6b349;
+    color:#111;
+    margin:3px;
+}
+
+button:disabled{
+    background:#666;
+    color:#aaa;
+}
+
+#chatInput{
+    width:calc(100% - 90px);
+    padding:8px;
+}
+
+#sendChatBtn{
+    width:80px;
+    padding:8px;
+}
 </style>
 </head>
+
 <body>
+
 <div class="container">
+
 <h1>🎮 联机五子棋</h1>
 
 <div id="hall">
-<div id="hallTip">正在连接服务器...</div>
-<button id="startBtn">准备开始</button>
+
+    <div id="hallTip">
+        正在连接服务器...
+    </div>
+
+    <button id="startBtn">
+        准备开始
+    </button>
+
 </div>
 
 <div id="game">
-<div id="myRole"></div>
-<div id="status">等待对局开始...</div>
-<div id="countdown"></div>
-<canvas id="board"></canvas>
-<div class="btn-group">
-<button id="restartBtn">重新开局</button>
-<button id="undoBtn">请求悔棋</button>
+
+    <div id="myRole"></div>
+
+    <div id="status">
+        等待对局开始...
+    </div>
+
+    <div id="countdown"></div>
+
+    <canvas id="board"></canvas>
+
+    <div class="btn-group">
+        <button id="restartBtn">
+            重新开局
+        </button>
+
+        <button id="undoBtn">
+            请求悔棋
+        </button>
+    </div>
+
+    <div class="btn-group">
+
+        <button class="quickChat">
+            行不行啊！
+        </button>
+
+        <button class="quickChat">
+            单挑啊！
+        </button>
+
+        <button class="quickChat">
+            我赢了！
+        </button>
+
+    </div>
+
+    <div id="chatBox"></div>
+
+    <div style="display:flex;gap:6px;">
+
+        <input
+            id="chatInput"
+            placeholder="输入消息"
+        >
+
+        <button id="sendChatBtn">
+            发送
+        </button>
+
+    </div>
+
 </div>
-<div class="btn-group">
-<button class="quickChat">行不行啊！</button>
-<button class="quickChat">单挑啊！</button>
-<button class="quickChat">我赢了！</button>
-</div>
-<div id="chatBox"></div>
-<div style="display:flex;gap:6px;">
-<input id="chatInput" placeholder="输入消息">
-<button id="sendChatBtn">发送</button>
-</div>
-</div>
+
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, update, onValue, get, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+import {
+    initializeApp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+    getDatabase,
+    ref,
+    set,
+    update,
+    onValue,
+    get,
+    onDisconnect,
+    runTransaction
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDEuVLSVMc9sAgfeZeNHwR88FAaBW0yEpY",
-  authDomain: "game-eed02.firebaseapp.com",
-  databaseURL: "https://game-eed02-default-rtdb.firebaseio.com",
-  projectId: "game-eed02",
-  storageBucket: "game-eed02.firebasestorage.app",
-  messagingSenderId: "817508526856",
-  appId: "1:817508526856:web:5df14ea809f18c3ad41abd",
-  measurementId: "G-ZQRTLDL7Z6"
+
+    apiKey:
+        "AIzaSyDEuVLSVMc9sAgfeNHwR88FAaBW0yEpY",
+
+    authDomain:
+        "game-eed02.firebaseapp.com",
+
+    databaseURL:
+        "https://game-eed02-default-rtdb.firebaseio.com",
+
+    projectId:
+        "game-eed02",
+
+    storageBucket:
+        "game-eed02.firebasestorage.app",
+
+    messagingSenderId:
+        "817508526856",
+
+    appId:
+        "1:817508526856:web:5df14ea809f18c3ad41abd",
+
+    measurementId:
+        "G-ZQRTLDL7Z6"
 };
 
+
 let db;
+
 try{
-  const app = initializeApp(firebaseConfig);
-  db = getDatabase(app);
+
+    const app =
+        initializeApp(firebaseConfig);
+
+    db =
+        getDatabase(app);
+
 }catch(e){
-  document.getElementById("hallTip").innerText = "初始化失败："+e.message;
+
+    document.getElementById("hallTip").innerText =
+        "Firebase 初始化失败：" + e.message;
 }
+
 
 const SIZE = 15;
+
 const CELL = 26;
+
 const PADDING = 14;
+
 const TIME_LIMIT = 20;
+
+
 let playerIndex = 0;
+
 let myChess = null;
-let roomRef = ref(db,"global/room");
-let board = Array(SIZE).fill().map(()=>Array(SIZE).fill(0));
+
+let board =
+    Array.from(
+        {length:SIZE},
+        () => Array(SIZE).fill(0)
+    );
+
 let turn = 1;
+
 let gameOver = false;
-let turnStartTime = Date.now();
+
 let countdownTimer = null;
-let lastBoard = null;
+
+let countdownStart = 0;
+
 let chatList = [];
 
-const hallDom = document.getElementById("hall");
-const hallTip = document.getElementById("hallTip");
-const startBtn = document.getElementById("startBtn");
-const gameDom = document.getElementById("game");
-const myRoleText = document.getElementById("myRole");
-const canvas = document.getElementById("board");
-const ctx = canvas.getContext("2d");
-const statusText = document.getElementById("status");
-const countdownText = document.getElementById("countdown");
-const chatBox = document.getElementById("chatBox");
-const chatInput = document.getElementById("chatInput");
-const sendChatBtn = document.getElementById("sendChatBtn");
-const undoBtn = document.getElementById("undoBtn");
-const restartBtn = document.getElementById("restartBtn");
-const quickBtns = document.querySelectorAll(".quickChat");
+let lastProcessedTurnStart = 0;
 
-canvas.width = PADDING*2 + CELL*(SIZE-1);
-canvas.height = PADDING*2 + CELL*(SIZE-1);
+let timeoutLock = false;
 
-quickBtns.forEach(btn=>{
-  btn.addEventListener("click",()=>{
-    if(!myChess) return;
-    const text = btn.innerText;
-    const name = myChess === "black" ? "【黑棋】" : "【白棋】";
-    get(roomRef).then(snap=>{
-      const data = snap.val();
-      let chats = data.chats || [];
-      chats.push(`${name}${text}`);
-      if(chats.length>50) chats.shift();
-      update(roomRef,{chats:chats});
-    }).catch(e=>console.log(e));
-  });
-});
+let moveLock = false;
+
+
+const roomRef =
+    ref(db,"global/room");
+
+
+const hallDom =
+    document.getElementById("hall");
+
+const hallTip =
+    document.getElementById("hallTip");
+
+const startBtn =
+    document.getElementById("startBtn");
+
+const gameDom =
+    document.getElementById("game");
+
+const myRoleText =
+    document.getElementById("myRole");
+
+const canvas =
+    document.getElementById("board");
+
+const ctx =
+    canvas.getContext("2d");
+
+const statusText =
+    document.getElementById("status");
+
+const countdownText =
+    document.getElementById("countdown");
+
+const chatBox =
+    document.getElementById("chatBox");
+
+const chatInput =
+    document.getElementById("chatInput");
+
+const sendChatBtn =
+    document.getElementById("sendChatBtn");
+
+const undoBtn =
+    document.getElementById("undoBtn");
+
+const restartBtn =
+    document.getElementById("restartBtn");
+
+const quickBtns =
+    document.querySelectorAll(".quickChat");
+
+
+canvas.width =
+    PADDING * 2 +
+    CELL * (SIZE - 1);
+
+canvas.height =
+    PADDING * 2 +
+    CELL * (SIZE - 1);/* =========================
+   棋盘绘制
+========================= */
 
 function drawAll(){
-  ctx.fillStyle = "#deb870";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.strokeStyle="#333";
-  ctx.lineWidth=1;
-  for(let i=0;i<SIZE;i++){
-    ctx.beginPath();
-    ctx.moveTo(PADDING, PADDING+i*CELL);
-    ctx.lineTo(PADDING+(SIZE-1)*CELL, PADDING+i*CELL);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(PADDING+i*CELL, PADDING);
-    ctx.lineTo(PADDING+i*CELL, PADDING+(SIZE-1)*CELL);
-    ctx.stroke();
-  }
-  for(let y=0;y<SIZE;y++){
-    for(let x=0;x<SIZE;x++){
-      const p = board[y][x];
-      if(!p) contfunction checkWin(x,y,player){
-  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
-  for(let [dx,dy] of dirs){
-    let cnt=1;
-    for(let i=1;i<5;i++){
-      const nx=x+dx*i; const ny=y+dy*i;
-      if(nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE&&board[ny][nx]===player) cnt++;
-      else break;
+
+    ctx.fillStyle = "#deb870";
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    /* 绘制棋盘 */
+
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1;
+
+
+    for(let i = 0; i < SIZE; i++){
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            PADDING,
+            PADDING + i * CELL
+        );
+
+        ctx.lineTo(
+            PADDING + (SIZE - 1) * CELL,
+            PADDING + i * CELL
+        );
+
+        ctx.stroke();
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            PADDING + i * CELL,
+            PADDING
+        );
+
+        ctx.lineTo(
+            PADDING + i * CELL,
+            PADDING + (SIZE - 1) * CELL
+        );
+
+        ctx.stroke();
     }
-    for(let i=1;i<5;i++){
-      const nx=x-dx*i; const ny=y-dy*i;
-      if(nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE&&board[ny][nx]===player) cnt++;
-      else break;
+
+
+    /* 绘制棋子 */
+
+    for(let y = 0; y < SIZE; y++){
+
+        for(let x = 0; x < SIZE; x++){
+
+            const p =
+                board[y]?.[x];
+
+
+            if(!p)
+                continue;
+
+
+            const px =
+                PADDING + x * CELL;
+
+            const py =
+                PADDING + y * CELL;
+
+
+            const gradient =
+                ctx.createRadialGradient(
+                    px - 4,
+                    py - 4,
+                    2,
+                    px,
+                    py,
+                    12
+                );
+
+
+            if(p === 1){
+
+                gradient.addColorStop(
+                    0,
+                    "#666"
+                );
+
+                gradient.addColorStop(
+                    1,
+                    "#050505"
+                );
+
+            }else{
+
+                gradient.addColorStop(
+                    0,
+                    "#fff"
+                );
+
+                gradient.addColorStop(
+                    1,
+                    "#ccc"
+                );
+            }
+
+
+            ctx.beginPath();
+
+            ctx.arc(
+                px,
+                py,
+                11,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle =
+                gradient;
+
+            ctx.fill();
+
+
+            ctx.strokeStyle =
+                "#222";
+
+            ctx.stroke();
+        }
     }
-    if(cnt>=5) return true;
-  }
-  return false;
 }
 
-function startCountdown(){
-  clearInterval(countdownTimer);
-  turnStartTime = Date.now();
-  countdownTimer = setInterval(()=>{
-    const passed = Math.floor((Date.now() - turnStartTime)/1000);
-    const remain = TIME_LIMIT - passed;
-    if(remain <= 0){
-      clearInterval(countdownTimer);
-      if(!gameOver){
-        const nextTurn = turn === 1 ? 2 : 1;
-        update(roomRef,{
-          turn: nextTurn,
-          turnStart: Date.now()
-        });
-        countdownText.innerText="⏱ 超时！自动切换回合";
-      }
-      return;
+
+/* =========================
+   判断五子连珠
+========================= */
+
+function checkWin(x, y, player){
+
+    const dirs = [
+
+        [1, 0],
+
+        [0, 1],
+
+        [1, 1],
+
+        [1, -1]
+
+    ];
+
+
+    for(const [dx, dy] of dirs){
+
+        let count = 1;
+
+
+        /* 正方向 */
+
+        for(let i = 1; i < 5; i++){
+
+            const nx =
+                x + dx * i;
+
+            const ny =
+                y + dy * i;
+
+
+            if(
+                nx >= 0 &&
+                nx < SIZE &&
+                ny >= 0 &&
+                ny < SIZE &&
+                board[ny][nx] === player
+            ){
+
+                count++;
+
+            }else{
+
+                break;
+            }
+        }
+
+
+        /* 反方向 */
+
+        for(let i = 1; i < 5; i++){
+
+            const nx =
+                x - dx * i;
+
+            const ny =
+                y - dy * i;
+
+
+            if(
+                nx >= 0 &&
+                nx < SIZE &&
+                ny >= 0 &&
+                ny < SIZE &&
+                board[ny][nx] === player
+            ){
+
+                count++;
+
+            }else{
+
+                break;
+            }
+        }
+
+
+        if(count >= 5){
+
+            return true;
+        }
     }
-    countdownText.innerText=`⏱ 剩余 ${remain} 秒落子`;
-  }, 500);
+
+
+    return false;
 }
 
-function handleMove(e){
-  e.preventDefault();
-  if(gameOver || !myChess) return;
-  const rect = canvas.getBoundingClientRect();
-  let mx, my;
-  if(e.changedTouches && e.changedTouches[0]){
-    mx = e.changedTouches[0].clientX - rect.left;
-    my = e.changedTouches[0].clientY - rect.top;
-  }else{
-    mx = e.clientX - rect.left;
-    my = e.clientY - rect.top;
-  }
-  const x = Math.round((mx-PADDING)/CELL);
-  const y = Math.round((my-PADDING)/CELL);
-  if(x<0||x>=SIZE||y<0||y>=SIZE) return;
-  if(board[y][x]!==0) return;
-  
-  const mySideNum = myChess==="black"?1:2;
-  if(turn !== mySideNum){
-    statusText.innerText="不是你的回合！";
-    return;
-  }
-  lastBoard = JSON.parse(JSON.stringify(board));
-  board[y][x] = mySideNum;
-  const win = checkWin(x,y,mySideNum);
-  const nextTurn = turn===1 ? 2 :1;
-  update(roomRef,{
-    board:board,
-    turn:nextTurn,
-    turnStart: Date.now(),
-    over:win,
-    winner: win ? mySideNum : 0,
-    lastBoard: lastBoard
-  });
+
+/* =========================
+   倒计时
+========================= */
+
+function startCountdown(serverStart){
+
+    clearInterval(
+        countdownTimer
+    );
+
+
+    countdownStart =
+        serverStart || Date.now();
+
+
+    lastProcessedTurnStart =
+        countdownStart;
+
+
+    function updateCountdown(){
+
+        if(gameOver){
+
+            clearInterval(
+                countdownTimer
+            );
+
+            countdownText.innerText =
+                "";
+
+            return;
+        }
+
+
+        const elapsed =
+            Math.floor(
+                (Date.now() - countdownStart) / 1000
+            );
+
+
+        const remain =
+            TIME_LIMIT - elapsed;
+
+
+        if(remain <= 0){
+
+            clearInterval(
+                countdownTimer
+            );
+
+
+            countdownText.innerText =
+                "⏱ 超时！";
+
+
+            handleTimeout();
+
+            return;
+        }
+
+
+        countdownText.innerText =
+            `⏱ 剩余 ${remain} 秒落子`;
+    }
+
+
+    updateCountdown();
+
+
+    countdownTimer =
+        setInterval(
+            updateCountdown,
+            500
+        );
 }
-canvas.addEventListener("touchend",handleMove);
-canvas.addEventListener("click",handleMove);
+
+
+/* =========================
+   超时处理
+========================= */
+
+async function handleTimeout(){
+
+    if(timeoutLock)
+        return;
+
+
+    timeoutLock = true;
+
+
+    try{
+
+        const snap =
+            await get(roomRef);
+
+
+        const data =
+            snap.val();
+
+
+        if(!data)
+            return;
+
+
+        if(data.over)
+            return;
+
+
+        const now =
+            Date.now();
+
+
+        const start =
+            data.turnStart || now;
+
+
+        /*
+         * 再次确认是否真的超时
+         */
+
+        if(
+            now - start <
+            TIME_LIMIT * 1000
+        ){
+
+            return;
+        }
+
+
+        /*
+         * 使用事务，
+         * 防止两个手机同时切换回合
+         */
+
+        await runTransaction(
+            roomRef,
+            current => {
+
+                if(!current)
+                    return current;
+
+
+                if(current.over)
+                    return current;
+
+
+                const currentStart =
+                    current.turnStart ||
+                    Date.now();
+
+
+                if(
+                    Date.now() -
+                    currentStart <
+                    TIME_LIMIT * 1000
+                ){
+
+                    return current;
+                }
+
+
+                current.turn =
+                    current.turn === 1
+                        ? 2
+                        : 1;
+
+
+                current.turnStart =
+                    Date.now();
+
+
+                return current;
+            }
+        );
+
+
+    }catch(e){
+
+        console.error(
+            "超时处理失败：",
+            e
+        );
+
+
+    }finally{
+
+        setTimeout(
+            () => {
+
+                timeoutLock =
+                    false;
+
+            },
+            1000
+        );
+    }
+}
+
+
+/* =========================
+   落子处理
+========================= */
+
+async function handleMove(e){
+
+    e.preventDefault();
+
+
+    if(moveLock)
+        return;
+
+
+    if(gameOver)
+        return;
+
+
+    if(!myChess)
+        return;
+
+
+    const mySideNum =
+        myChess === "black"
+            ? 1
+            : 2;
+
+
+    if(turn !== mySideNum){
+
+        statusText.innerText =
+            "不是你的回合！";
+
+        return;
+    }
+
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+
+    let mx;
+    let my;
+
+
+    if(
+        e.changedTouches &&
+        e.changedTouches[0]
+    ){
+
+        mx =
+            e.changedTouches[0].clientX -
+            rect.left;
+
+        my =
+            e.changedTouches[0].clientY -
+            rect.top;
+
+    }else{
+
+        mx =
+            e.clientX -
+            rect.left;
+
+        my =
+            e.clientY -
+            rect.top;
+    }
+
+
+    const x =
+        Math.round(
+            (mx - PADDING) / CELL
+        );
+
+
+    const y =
+        Math.round(
+            (my - PADDING) / CELL
+        );
+
+
+    if(
+        x < 0 ||
+        x >= SIZE ||
+        y < 0 ||
+        y >= SIZE
+    ){
+
+        return;
+    }
+
+
+    if(board[y][x] !== 0){
+
+        return;
+    }
+
+
+    moveLock = true;
+
+
+    try{
+
+        /*
+         * 从 Firebase 重新读取，
+         * 防止本地棋盘与服务器不同步
+         */
+
+        const snap =
+            await get(roomRef);
+
+
+        const data =
+            snap.val();
+
+
+        if(!data)
+            return;
+
+
+        if(data.over)
+            return;
+
+
+        if(data.turn !== mySideNum){
+
+            statusText.innerText =
+                "不是你的回合！";
+
+            return;
+        }
+
+
+        const newBoard =
+            data.board ||
+            Array.from(
+                {length: SIZE},
+                () => Array(SIZE).fill(0)
+            );
+
+
+        /*
+         * 防止两个人同时下到同一个位置
+         */
+
+        if(newBoard[y][x] !== 0)
+            return;
+
+
+        newBoard[y][x] =
+            mySideNum;
+
+
+        /*
+         * 使用最新棋盘判断胜负
+         */
+
+        board =
+            newBoard;
+
+
+        const win =
+            checkWin(
+                x,
+                y,
+                mySideNum
+            );
+
+
+        const nextTurn =
+            mySideNum === 1
+                ? 2
+                : 1;
+
+
+        await update(
+            roomRef,
+            {
+
+                board:
+                    newBoard,
+
+                turn:
+                    win
+                        ? mySideNum
+                        : nextTurn,
+
+                turnStart:
+                    Date.now(),
+
+                over:
+                    win,
+
+                winner:
+                    win
+                        ? mySideNum
+                        : 0
+            }
+        );
+
+
+    }catch(e){
+
+        console.error(
+            "落子失败：",
+            e
+        );
+
+
+    }finally{
+
+        /*
+         * 防止手机上的
+         * pointer/touch/click
+         * 重复落子
+         */
+
+        setTimeout(
+            () => {
+
+                moveLock =
+                    false;
+
+            },
+            250
+        );
+    }
+}
+
+
+/*
+ * 使用 pointerup，
+ * 避免手机 touchend + click
+ * 重复触发
+ */
+
+canvas.addEventListener(
+    "pointerup",
+    handleMove
+);/* =========================
+   聊天功能
+========================= */
 
 function renderChat(){
-  chatBox.innerHTML = chatList.map(item=>`<div>${item}</div>`).join("");
-  chatBox.scrollTop = chatBox.scrollHeight;
+
+    chatBox.innerHTML = "";
+
+
+    for(const item of chatList){
+
+        const div =
+            document.createElement("div");
+
+
+        /*
+         * 使用 textContent，
+         * 防止聊天内容被当成 HTML 执行
+         */
+
+        div.textContent =
+            item;
+
+
+        chatBox.appendChild(div);
+    }
+
+
+    chatBox.scrollTop =
+        chatBox.scrollHeight;
 }
 
-sendChatBtn.addEventListener("click",()=>{
-  const text = chatInput.value.trim();
-  if(!text || !myChess) return;
-  const name = myChess === "black" ? "【黑棋】" : "【白棋】";
-  get(roomRef).then(snap=>{
-    const data = snap.val();
-    let chats = data.chats || [];
-    chats.push(`${name}${text}`);
-    if(chats.length>50) chats.shift();
-    update(roomRef,{chats:chats});
-  });
-  chatInput.value="";
-});
 
-undoBtn.addEventListener("click",async ()=>{
-  const snap = await get(roomRef);
-  const data = snap.val();
-  if(!data.lastBoard){
-    alert("暂无步骤可以悔棋");
-    return;
-  }
-  if(confirm("向对手发起悔棋请求？")){
-    const name = myChess === "black" ? "【黑棋】" : "【白棋】";
-    get(roomRef).then(s=>{
-      const d = s.val();
-      let chats = d.chats||[];
-      chats.push(`${name} 请求悔棋，请对手确认！`);
-      update(roomRef,{chats});
-    });
-  }
-});
+/* =========================
+   发送聊天
+========================= */
 
-// 可靠加入房间
+async function sendChat(text){
+
+    text =
+        String(text || "").trim();
+
+
+    if(!text)
+        return;
+
+
+    if(!myChess)
+        return;
+
+
+    try{
+
+        const snap =
+            await get(roomRef);
+
+
+        const data =
+            snap.val();
+
+
+        if(!data)
+            return;
+
+
+        let chats =
+            Array.isArray(data.chats)
+                ? [...data.chats]
+                : [];
+
+
+        const name =
+            myChess === "black"
+                ? "【黑棋】"
+                : "【白棋】";
+
+
+        chats.push(
+            `${name}${text}`
+        );
+
+
+        /*
+         * 最多保存50条聊天
+         */
+
+        if(chats.length > 50){
+
+            chats =
+                chats.slice(-50);
+        }
+
+
+        await update(
+            roomRef,
+            {
+                chats: chats
+            }
+        );
+
+
+    }catch(e){
+
+        console.error(
+            "发送消息失败：",
+            e
+        );
+    }
+}
+
+
+/* =========================
+   发送按钮
+========================= */
+
+sendChatBtn.addEventListener(
+    "click",
+    async () => {
+
+        const text =
+            chatInput.value.trim();
+
+
+        if(!text)
+            return;
+
+
+        chatInput.value = "";
+
+
+        await sendChat(text);
+    }
+);
+
+
+/* =========================
+   回车发送
+========================= */
+
+chatInput.addEventListener(
+    "keydown",
+    e => {
+
+        if(e.key === "Enter"){
+
+            sendChatBtn.click();
+        }
+    }
+);
+
+
+/* =========================
+   快捷聊天
+========================= */
+
+quickBtns.forEach(
+    btn => {
+
+        btn.addEventListener(
+            "click",
+            () => {
+
+                sendChat(
+                    btn.innerText
+                );
+            }
+        );
+    }
+);
+
+
+/* =========================
+   悔棋请求
+========================= */
+
+undoBtn.addEventListener(
+    "click",
+    async () => {
+
+        if(!myChess)
+            return;
+
+
+        try{
+
+            const snap =
+                await get(roomRef);
+
+
+            const data =
+                snap.val();
+
+
+            if(!data)
+                return;
+
+
+            if(!data.lastBoard){
+
+                alert(
+                    "暂无可以悔棋的步骤"
+                );
+
+                return;
+            }
+
+
+            if(data.undoRequest){
+
+                alert(
+                    "已经有一个悔棋请求，请等待对手处理"
+                );
+
+                return;
+            }
+
+
+            if(
+                confirm(
+                    "向对手发起悔棋请求？"
+                )
+            ){
+
+                await update(
+                    roomRef,
+                    {
+                        undoRequest:
+                            playerIndex
+                    }
+                );
+
+
+                await sendChat(
+                    "请求悔棋，请对手确认！"
+                );
+            }
+
+
+        }catch(e){
+
+            console.error(
+                "悔棋请求失败：",
+                e
+            );
+        }
+    }
+);
+
+
+/* =========================
+   加入房间
+========================= */
+
 async function joinRoom(){
-  try{
-    hallTip.innerText = "正在读取房间数据...";
-    const snap = await get(roomRef);
-    let room = snap.val();
 
-    if(!room){
-      hallTip.innerText = "正在创建房间...";
-      room = {
-        p1:false, p2:false,
-        ready1:false, ready2:false,
-        gameStart:false,
-        chess1:"", chess2:"",
-        board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-        turn:1, turnStart:Date.now(),
-        over:false, winner:0,
-        chats:[], lastBoard:null
-      };
-      await set(roomRef, room);
+    try{
+
+        hallTip.innerText =
+            "正在读取房间数据...";
+
+
+        const snap =
+            await get(roomRef);
+
+
+        let room =
+            snap.val();
+
+
+        /*
+         * 第一个玩家创建房间
+         */
+
+        if(!room){
+
+            room = {
+
+                p1:false,
+
+                p2:false,
+
+                ready1:false,
+
+                ready2:false,
+
+                gameStart:false,
+
+                chess1:"",
+
+                chess2:"",
+
+                board:
+                    Array.from(
+                        {length:SIZE},
+                        () => Array(SIZE).fill(0)
+                    ),
+
+                turn:1,
+
+                turnStart:
+                    Date.now(),
+
+                over:false,
+
+                winner:0,
+
+                chats:[],
+
+                lastBoard:null,
+
+                undoRequest:0,
+
+                restart1:false,
+
+                restart2:false
+            };
+
+
+            await set(
+                roomRef,
+                room
+            );
+        }
+
+
+        /*
+         * 使用事务抢占玩家位置
+         *
+         * 避免两个玩家同时进入时
+         * 抢到同一个位置
+         */
+
+        const result =
+            await runTransaction(
+                roomRef,
+                current => {
+
+                    if(!current){
+
+                        return null;
+                    }
+
+
+                    if(!current.p1){
+
+                        current.p1 =
+                            true;
+
+                        return current;
+                    }
+
+
+                    if(!current.p2){
+
+                        current.p2 =
+                            true;
+
+                        return current;
+                    }
+
+
+                    /*
+                     * undefined 表示事务失败，
+                     * 房间已经满员
+                     */
+
+                    return;
+                }
+            );
+
+
+        if(!result.committed){
+
+            hallTip.innerText =
+                "房间已满，请刷新后重试";
+
+
+            return false;
+        }
+
+
+        const finalRoom =
+            result.snapshot.val();
+
+
+        /*
+         * 根据加入前后的状态
+         * 判断自己是玩家1还是玩家2
+         */
+
+        if(
+            !room.p1 &&
+            finalRoom.p1
+        ){
+
+            playerIndex = 1;
+
+        }else if(
+            !room.p2 &&
+            finalRoom.p2
+        ){
+
+            playerIndex = 2;
+
+        }else{
+
+            /*
+             * 极端情况下重新判断
+             */
+
+            if(!room.p1){
+
+                playerIndex = 1;
+
+            }else{
+
+                playerIndex = 2;
+            }
+        }
+
+
+        /*
+         * 当前玩家的位置
+         */
+
+        const field =
+            playerIndex === 1
+                ? "p1"
+                : "p2";
+
+
+        /*
+         * 浏览器关闭页面、
+         * 网络断开时自动释放位置
+         */
+
+        onDisconnect(
+            ref(
+                db,
+                `global/room/${field}`
+            )
+        ).set(false);
+
+
+        hallTip.innerText =
+            "你已加入，等待对手进入...";
+
+
+        return true;
+
+
+    }catch(err){
+
+        console.error(
+            "加入房间失败：",
+            err
+        );
+
+
+        hallTip.innerText =
+            "连接失败：" +
+            err.message;
+
+
+        return false;
     }
-
-    if(!room.p1){
-      playerIndex = 1;
-      await update(roomRef, {p1:true});
-    }else if(!room.p2){
-      playerIndex = 2;
-      await update(roomRef, {p2:true});
-    }else{
-      hallTip.innerText = "房间已满，请稍后刷新重试";
-      return false;
-    }
-
-    const field = playerIndex===1 ? "p1" : "p2";
-    onDisconnect(roomRef.child(field)).set(false);
-    
-    hallTip.innerText = "你已加入，等待对手进入...";
-    return true;
-
-  }catch(err){
-    console.error(err);
-    hallTip.innerText = "连接失败："+err.message;
-    return false;
-  }
 }
 
-startBtn.addEventListener("click",async ()=>{
-  if(playerIndex===0) return;
-  const key = playerIndex===1 ? "ready1" : "ready2";
-  await update(roomRef,{[key]:true});
-});
+
+/* =========================
+   准备按钮
+========================= */
+
+startBtn.addEventListener(
+    "click",
+    async () => {
+
+        if(playerIndex === 0)
+            return;
+
+
+        const key =
+            playerIndex === 1
+                ? "ready1"
+                : "ready2";
+
+
+        try{
+
+            await update(
+                roomRef,
+                {
+                    [key]:true
+                }
+            );
+
+
+            startBtn.disabled =
+                true;
+
+
+            hallTip.innerText =
+                "你已准备，等待对手...";
+
+
+        }catch(e){
+
+            console.error(
+                "准备失败：",
+                e
+            );
+        }
+    }
+);
+
+
+/* =========================
+   房间监听
+========================= */
+
 function listenRoom(){
-  onValue(roomRef, snap=>{
-    const data = snap.val();
-    if(!data) return;
-    
-    board = data.board || [];
-    turn = data.turn || 1;
-    gameOver = data.over || false;
-    chatList = data.chats || [];
-    renderChat();
-    drawAll();
 
-    if(!data.p1 || !data.p2){
-      clearInterval(countdownTimer);
-      countdownText.innerText="";
-      hallDom.style.display="block";
-      gameDom.style.display="none";
-      startBtn.style.display="none";
-      if(playerIndex===0){
-        hallTip.innerText = "正在连接服务器...";
-      }else{
-        hallTip.innerText = "对手已退出，等待新玩家加入...";
-      }
-      myChess = null;
-      return;
+    onValue(
+        roomRef,
+        async snap => {
+
+            const data =
+                snap.val();
+
+
+            if(!data)
+                return;
+
+
+            /*
+             * 同步棋盘
+             */
+
+            board =
+                data.board ||
+                Array.from(
+                    {length:SIZE},
+                    () => Array(SIZE).fill(0)
+                );
+
+
+            /*
+             * 同步当前回合
+             */
+
+            turn =
+                data.turn || 1;
+
+
+            /*
+             * 同步游戏结束状态
+             */
+
+            gameOver =
+                data.over || false;
+
+
+            /*
+             * 同步聊天
+             */
+
+            chatList =
+                Array.isArray(data.chats)
+                    ? data.chats
+                    : [];
+
+
+            renderChat();
+
+            drawAll();
+
+
+            /* =========================
+               对手退出
+            ========================= */
+
+            if(
+                !data.p1 ||
+                !data.p2
+            ){
+
+                clearInterval(
+                    countdownTimer
+                );
+
+
+                countdownText.innerText =
+                    "";
+
+
+                hallDom.style.display =
+                    "block";
+
+
+                gameDom.style.display =
+                    "none";
+
+
+                startBtn.style.display =
+                    "none";
+
+
+                if(playerIndex === 0){
+
+                    hallTip.innerText =
+                        "正在连接服务器...";
+
+                }else{
+
+                    hallTip.innerText =
+                        "对手已退出，等待新玩家加入...";
+                }
+
+
+                myChess = null;
+
+
+                return;
+            }
+
+
+            /* =========================
+               两名玩家都在线
+            ========================= */
+
+            hallDom.style.display =
+                "block";
+
+
+            gameDom.style.display =
+                "none";
+
+
+            startBtn.style.display =
+                "block";
+
+
+            const meReady =
+                playerIndex === 1
+                    ? data.ready1
+                    : data.ready2;
+
+
+            const otherReady =
+                playerIndex === 1
+                    ? data.ready2
+                    : data.ready1;
+
+
+            if(
+                meReady &&
+                otherReady
+            ){
+
+                hallTip.innerText =
+                    "双方已准备，对局即将开始...";
+
+
+                startBtn.style.display =
+                    "none";
+
+
+            }else if(meReady){
+
+                hallTip.innerText =
+                    "你已准备，等待对手准备...";
+
+
+                startBtn.disabled =
+                    true;
+
+
+            }else{
+
+                hallTip.innerText =
+                    "两名玩家已就位，点击准备开始";
+
+
+                startBtn.disabled =
+                    false;
+            }
+
+
+            /* =========================
+               开始游戏
+            ========================= */
+
+            /*
+             * 只允许玩家1负责初始化，
+             * 避免两个客户端同时写入
+             */
+
+            if(
+                data.ready1 &&
+                data.ready2 &&
+                !data.gameStart &&
+                playerIndex === 1
+            ){
+
+                const rand =
+                    Math.random() > 0.5;
+
+
+                await update(
+                    roomRef,
+                    {
+
+                        gameStart:true,
+
+                        chess1:
+                            rand
+                                ? "black"
+                                : "white",
+
+                        chess2:
+                            rand
+                                ? "white"
+                                : "black",
+
+                        turn:1,
+
+                        turnStart:
+                            Date.now(),
+
+                        over:false,
+
+                        winner:0,
+
+                        lastBoard:null,
+
+                        undoRequest:0
+                    }
+                );
+
+
+                return;
+            }
+
+
+            /* =========================
+               游戏已经开始
+            ========================= */
+
+            if(data.gameStart){
+
+                hallDom.style.display =
+                    "none";
+
+
+                gameDom.style.display =
+                    "block";
+
+
+                /*
+                 * 确定自己的棋子
+                 */
+
+                myChess =
+                    playerIndex === 1
+                        ? data.chess1
+                        : data.chess2;
+
+
+                myRoleText.innerText =
+                    `你执：${
+                        myChess === "black"
+                            ? "黑棋⚫"
+                            : "白棋⚪"
+                    }`;
+
+
+                /*
+                 * 游戏结束
+                 */
+
+                if(gameOver){
+
+                    clearInterval(
+                        countdownTimer
+                    );
+
+
+                    countdownText.innerText =
+                        "";
+
+
+                    statusText.innerText =
+                        data.winner === 1
+                            ? "🏆 黑棋胜利！"
+                            : "🏆 白棋胜利！";
+
+
+                }else{
+
+                    /*
+                     * 显示当前回合
+                     */
+
+                    statusText.innerText =
+                        turn === 1
+                            ? "当前：黑棋落子"
+                            : "当前：白棋落子";
+
+
+                    /*
+                     * Firebase 的时间戳
+                     */
+
+                    const start =
+                        data.turnStart ||
+                        Date.now();
+
+
+                    /*
+                     * 只有真正换回合时
+                     * 才重新启动倒计时
+                     */
+
+                    if(
+                        start !==
+                        lastProcessedTurnStart
+                    ){
+
+                        startCountdown(
+                            start
+                        );
+                    }
+                }
+            }
+        }
+    );
+}/* =========================
+   重新开局
+========================= */
+
+restartBtn.addEventListener(
+    "click",
+    async () => {
+
+        if(playerIndex === 0)
+            return;
+
+
+        /*
+         * 不再一个人点击就直接重置，
+         * 必须双方都同意重新开局
+         */
+
+        const key =
+            playerIndex === 1
+                ? "restart1"
+                : "restart2";
+
+
+        try{
+
+            await update(
+                roomRef,
+                {
+                    [key]:true
+                }
+            );
+
+
+            hallTip.innerText =
+                "等待对手确认重新开始...";
+
+
+        }catch(e){
+
+            console.error(
+                "申请重新开始失败：",
+                e
+            );
+        }
     }
+);
 
-    hallDom.style.display="block";
-    gameDom.style.display="none";
-    startBtn.style.display="block";
-    
-    const meReady = playerIndex===1 ? data.ready1 : data.ready2;
-    const otherReady = playerIndex===1 ? data.ready2 : data.ready1;
-    
-    if(meReady && otherReady){
-      hallTip.innerText = "双方已准备，对局即将开始...";
-      startBtn.style.display="none";
-    }else if(meReady){
-      hallTip.innerText = "你已准备，等待对手准备...";
-      startBtn.disabled = true;
-    }else{
-      hallTip.innerText = "两名玩家已就位，点击准备开始";
-      startBtn.disabled = false;
+
+/* =========================
+   重新开始监听
+========================= */
+
+onValue(
+    roomRef,
+    async snap => {
+
+        const data =
+            snap.val();
+
+
+        if(!data)
+            return;
+
+
+        /*
+         * 双方都点击重新开始
+         *
+         * 只让玩家1负责执行真正的重置，
+         * 防止两个客户端同时重置。
+         */
+
+        if(
+            data.restart1 &&
+            data.restart2 &&
+            playerIndex === 1
+        ){
+
+            try{
+
+                await update(
+                    roomRef,
+                    {
+
+                        ready1:false,
+
+                        ready2:false,
+
+                        gameStart:false,
+
+                        chess1:"",
+
+                        chess2:"",
+
+                        board:
+                            Array.from(
+                                {length:SIZE},
+                                () => Array(SIZE).fill(0)
+                            ),
+
+                        turn:1,
+
+                        turnStart:
+                            Date.now(),
+
+                        over:false,
+
+                        winner:0,
+
+                        chats:[],
+
+                        lastBoard:null,
+
+                        undoRequest:0,
+
+                        restart1:false,
+
+                        restart2:false
+                    }
+                );
+
+
+            }catch(e){
+
+                console.error(
+                    "重新开始失败：",
+                    e
+                );
+            }
+        }
     }
+);
 
-    if(data.ready1 && data.ready2 && !data.gameStart){
-      const rand = Math.random() > 0.5;
-      update(roomRef,{
-        gameStart:true,
-        chess1: rand ? "black" : "white",
-        chess2: rand ? "white" : "black"
-      });
-      return;
-    }
 
-    if(data.gameStart){
-      hallDom.style.display="none";
-      gameDom.style.display="block";
-      
-      myChess = playerIndex===1 ? data.chess1 : data.chess2;
-      myRoleText.innerText = `你执：${myChess==="black"?"黑棋⚫":"白棋⚪"}`;
-
-      if(gameOver){
-        clearInterval(countdownTimer);
-        countdownText.innerText="";
-        statusText.innerText = data.winner===1 ? "🏆 黑棋胜利！" : "🏆 白棋胜利！";
-      }else{
-        statusText.innerText = turn===1 ? "当前：黑棋落子" : "当前：白棋落子";
-        turnStartTime = data.turnStart;
-        startCountdown();
-      }
-    }
-  });
-}
-
-restartBtn.addEventListener("click",async ()=>{
-  clearInterval(countdownTimer);
-  await update(roomRef,{
-    ready1:false, ready2:false, gameStart:false,
-    chess1:"", chess2:"",
-    board:Array(SIZE).fill().map(()=>Array(SIZE).fill(0)),
-    turn:1, turnStart:Date.now(),
-    over:false, winner:0,
-    chats:[], lastBoard:null
-  });
-});
+/* =========================
+   初始化
+========================= */
 
 async function init(){
-  listenRoom();
-  await joinRoom();
+
+    /*
+     * Firebase 初始化失败时停止
+     */
+
+    if(!db){
+
+        hallTip.innerText =
+            "Firebase 未连接";
+
+        return;
+    }
+
+
+    /*
+     * 开始监听房间
+     */
+
+    listenRoom();
+
+
+    /*
+     * 加入房间
+     */
+
+    await joinRoom();
+
+
+    /*
+     * 初始绘制棋盘
+     */
+
+    drawAll();
 }
 
+
+/* =========================
+   启动游戏
+========================= */
+
 init();
-drawAll();
+
+
 </script>
+
 </body>
 </html>
