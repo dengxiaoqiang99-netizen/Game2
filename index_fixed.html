@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>联机五子棋</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#222;color:#fff;font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:10px}
+.container{max-width:460px;margin:auto}
+h1{font-size:26px;margin:8px 0 12px}
+#hall{margin-top:20px}
+#tip{font-size:17px;color:#ffdd44;min-height:28px;word-break:break-all}
+#roomInfo{font-size:13px;color:#9fd8ff;word-break:break-all;margin:8px 0}
+#game{display:none}
+#role{color:#ffd066;margin:5px}
+#status{font-size:18px;color:#8cf;min-height:26px}
+#time{font-size:20px;color:#ff6666;font-weight:bold;min-height:28px}
+button{padding:9px 13px;margin:4px;border:0;border-radius:8px;background:#e6b349;color:#111;font-size:14px}
+button:disabled{background:#666;color:#aaa}
+#board{display:block;width:404px;height:404px;max-width:100%;margin:8px auto;background:#deb870;border-radius:6px;touch-action:none}
+#chatBox{height:120px;background:#333;text-align:left;overflow-y:auto;padding:8px;border-radius:6px;margin:8px 0;font-size:14px}
+.chatRow{margin:3px 0}
+#chatInput{width:calc(100% - 88px);padding:9px;border:0;border-radius:6px}
+#sendChat{width:76px}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🎮 联机五子棋</h1>
+
+<div id="hall">
+  <div id="tip">正在连接服务器...</div>
+  <div id="roomInfo"></div>
+  <button id="shareBtn" style="display:none">复制邀请链接</button>
+  <br>
+  <button id="readyBtn" style="display:none">准备开始</button>
+</div>
+
+<div id="game">
+  <div id="role"></div>
+  <div id="status"></div>
+  <div id="time"></div>
+
+  <canvas id="board" width="404" height="404"></canvas>
+
+  <div>
+    <button id="restartBtn">重新开局</button>
+    <button id="undoBtn">请求悔棋</button>
+  </div>
+
+  <div id="chatBox"></div>
+  <div>
+    <input id="chatInput" placeholder="输入消息">
+    <button id="sendChat">发送</button>
+  </div>
+</div>
+</div>
+
+<script type="module">
+import { initializeApp }
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  getDatabase,
+  ref,
+  set,
+  get,
+  update,
+  onValue,
+  runTransaction,
+  onDisconnect
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDEuVLSVMc9sAgfeNHwR88FAaBW0yEpY",
+  authDomain: "game-eed02.firebaseapp.com",
+  databaseURL: "https://game-eed02-default-rtdb.firebaseio.com",
+  projectId: "game-eed02",
+  storageBucket: "game-eed02.firebasestorage.app",
+  messagingSenderId: "817508526856",
+  appId: "1:817508526856:web:5df14ea809f18c3ad41abd"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const SIZE = 15;
+const CELL = 26;
+const PAD = 14;
+const TIME_LIMIT = 20;
+
+let roomId = "";
+let roomRef = null;
+let player = 0;
+let color = 0;
+let sessionId = "";
+let board = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
+let turn = 1;
+let over = false;
+let winner = 0;
+let timer = null;
+let lastTurnStart = 0;
+let moveBusy = false;
+let unsubscribeRoom = null;
+
+const hall = document.getElementById("hall");
+const game = document.getElementById("game");
+const tip = document.getElementById("tip");
+const roomInfo = document.getElementById("roomInfo");
+const shareBtn = document.getElementById("shareBtn");
+const readyBtn = document.getElementById("readyBtn");
+const roleText = document.getElementById("role");
+const statusText = document.getElementById("status");
+const timeText = document.getElementById("time");
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const chatBox = document.getElementById("chatBox");
+const chatInput = document.getElementById("chatInput");
+
+function emptyBoard(){
+  return Array.from({length:SIZE}, () => Array(SIZE).fill(0));
+}
+
+function newId(){
+  return Math.random().toString(36).slice(2,8).toUpperCase();
+}
+
+function getSessionId(){
+  let id = sessionStorage.getItem("gomoku_session_id");
+
+  if(!id){
+    id =
+      (crypto.randomUUID ? crypto.randomUUID() :
+      Date.now() + "_" + Math.random());
+
+    sessionStorage.setItem("gomoku_session_id", id);
+  }
+
+  return id;
+}
+
+function getRoomFromUrl(){
+  const url = new URL(location.href);
+  return (url.searchParams.get("room") || "").trim().toUpperCase();
+}
+
+function makeInviteLink(id){
+  const url = new URL(location.href);
+  url.search = "";
+  url.searchParams.set("room", id);
+  return url.toString();
+}
+
+function showRoomLink(){
+  const link = makeInviteLink(roomId);
+  roomInfo.textContent = "邀请链接：" + link;
+  shareBtn.style.display = "inline-block";
+}
+
+function drawBoard(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle = "#deb870";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 1;
+
+  for(let i=0;i<SIZE;i++){
+    ctx.beginPath();
+    ctx.moveTo(PAD, PAD+i*CELL);
+    ctx.lineTo(PAD+(SIZE-1)*CELL, PAD+i*CELL);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(PAD+i*CELL, PAD);
+    ctx.lineTo(PAD+i*CELL, PAD+(SIZE-1)*CELL);
+    ctx.stroke();
+  }
+
+  for(let y=0;y<SIZE;y++){
+    for(let x=0;x<SIZE;x++){
+
+      const p = board[y][x];
+
+      if(!p) continue;
+
+      const px = PAD+x*CELL;
+      const py = PAD+y*CELL;
+
+      ctx.beginPath();
+      ctx.arc(px,py,11,0,Math.PI*2);
+
+      ctx.fillStyle = p===1 ? "#111" : "#fff";
+      ctx.fill();
+
+      ctx.strokeStyle = "#222";
+      ctx.stroke();
+    }
+  }
+}
+
+function checkWin(x,y,p){
+  const dirs = [
+    [1,0],
+    [0,1],
+    [1,1],
+    [1,-1]
+  ];
+
+  for(const [dx,dy] of dirs){
+
+    let count = 1;
+
+    for(let i=1;i<5;i++){
+      const nx=x+dx*i;
+      const ny=y+dy*i;
+
+      if(
+        nx>=0 && nx<SIZE &&
+        ny>=0 && ny<SIZE &&
+        board[ny][nx]===p
+      ){
+        count++;
+      }else{
+        break;
+      }
+    }
+
+    for(let i=1;i<5;i++){
+      const nx=x-dx*i;
+      const ny=y-dy*i;
+
+      if(
+        nx>=0 && nx<SIZE &&
+        ny>=0 && ny<SIZE &&
+        board[ny][nx]===p
+      ){
+        count++;
+      }else{
+        break;
+      }
+    }
+
+    if(count>=5) return true;
+  }
+
+  return false;
+}
+
+/*
+ * 关键：
+ * 用事务原子抢占玩家位置。
+ * 第一个成功占用 p1 的就是1P，
+ * 第二个成功占用 p2 的就是2P。
+ */
+async function claimPlayer(){
+
+  const result = await runTransaction(
+    roomRef,
+    current => {
+
+      if(!current) return;
+
+      /*
+       * 页面刷新后，如果 session 仍然存在，
+       * 继续保持原来的身份。
+       */
+      if(current.p1?.session === sessionId){
+        return current;
+      }
+
+      if(current.p2?.session === sessionId){
+        return current;
+      }
+
+      if(!current.p1){
+        current.p1 = {
+          online:true,
+          session:sessionId
+        };
+
+        return current;
+      }
+
+      if(!current.p2){
+        current.p2 = {
+          online:true,
+          session:sessionId
+        };
+
+        return current;
+      }
+
+      /*
+       * 房间已经满员。
+       */
+      return;
+    }
+  );
+
+  if(!result.committed){
+    throw new Error("房间已满");
+  }
+
+  const data = result.snapshot.val();
+
+  if(data.p1?.session === sessionId){
+    player = 1;
+  }else if(data.p2?.session === sessionId){
+    player = 2;
+  }else{
+    throw new Error("无法确定玩家身份");
+  }
+
+  /*
+   * 只有真正关闭/断线时才释放自己的位置。
+   */
+  await onDisconnect(
+    ref(db,"rooms/"+roomId+"/p"+player)
+  ).set(null);
+}
+
+async function createRoom(){
+
+  roomId = newId();
+
+  roomRef = ref(db,"rooms/"+roomId);
+
+  await set(roomRef,{
+    p1:null,
+    p2:null,
+
+    ready1:false,
+    ready2:false,
+
+    gameStart:false,
+
+    chess1:0,
+    chess2:0,
+
+    board:emptyBoard(),
+
+    turn:1,
+    turnStart:0,
+
+    over:false,
+    winner:0,
+
+    chats:[],
+    lastBoard:null,
+
+    undoRequest:0,
+
+    restart1:false,
+    restart2:false
+  });
+
+  await claimPlayer();
+
+  history.replaceState(
+    null,
+    "",
+    makeInviteLink(roomId)
+  );
+
+  showRoomLink();
+}
+
+async function joinExistingRoom(){
+
+  roomId = getRoomFromUrl();
+
+  if(!roomId){
+    await createRoom();
+    return;
+  }
+
+  roomRef = ref(db,"rooms/"+roomId);
+
+  const snap = await get(roomRef);
+
+  if(!snap.exists()){
+    throw new Error("房间不存在或已经失效");
+  }
+
+  await claimPlayer();
+
+  showRoomLink();
+
+  history.replaceState(
+    null,
+    "",
+    makeInviteLink(roomId)
+  );
+}
+
+function startRoomListener(){
+
+  /*
+   * 这里是之前代码的核心 BUG：
+   *
+   * 之前在 roomId 还没有读取/创建之前，
+   * 就执行了：
+   *
+   * onValue(ref(db,"rooms/"+roomId))
+   *
+   * 当时 roomId 是 null，
+   * 实际监听的是 rooms/null。
+   *
+   * 所以后续真正房间的数据根本没有被监听。
+   *
+   * 现在必须：
+   * 1. 先确定 roomId
+   * 2. 先确定 roomRef
+   * 3. 最后再启动 onValue
+   */
+
+  if(unsubscribeRoom){
+    unsubscribeRoom();
+    unsubscribeRoom = null;
+  }
+
+  unsubscribeRoom = onValue(
+    roomRef,
+    snapshot => {
+
+      const data = snapshot.val();
+
+      if(!data) return;
+
+      applyRoomData(data);
+    },
+    error => {
+
+      console.error("Firebase监听失败：",error);
+
+      tip.textContent =
+        "Firebase连接失败：" + error.message;
+    }
+  );
+}
+
+function applyRoomData(data){
+
+  board =
+    Array.isArray(data.board)
+      ? data.board
+      : emptyBoard();
+
+  turn = data.turn || 1;
+  over = !!data.over;
+  winner = data.winner || 0;
+
+  renderChat(data.chats || []);
+
+  /*
+   * 2P 尚未进入。
+   */
+  if(!data.p2){
+
+    hall.style.display = "block";
+    game.style.display = "none";
+
+    readyBtn.style.display = "inline-block";
+    readyBtn.disabled = !!(
+      player===1 && data.ready1
+    );
+
+    tip.textContent =
+      `房间 ${roomId} · 你是1P · 等待2P加入`;
+
+    drawBoard();
+
+    return;
+  }
+
+  /*
+   * 双方都已经进入。
+   */
+  if(!data.gameStart){
+
+    hall.style.display = "block";
+    game.style.display = "none";
+
+    readyBtn.style.display = "inline-block";
+
+    const meReady =
+      player===1 ? data.ready1 : data.ready2;
+
+    readyBtn.disabled = !!meReady;
+
+    tip.textContent =
+      meReady
+        ? "你已准备，等待对手准备..."
+        : "双方已进入，请点击准备开始";
+
+    drawBoard();
+
+    /*
+     * 只有1P负责初始化游戏。
+     */
+    if(
+      player===1 &&
+      data.ready1 &&
+      data.ready2
+    ){
+      startGame(data);
+    }
+
+    return;
+  }
+
+  /*
+   * 游戏已经开始。
+   */
+  hall.style.display = "none";
+  game.style.display = "block";
+
+  color =
+    player===1
+      ? data.chess1
+      : data.chess2;
+
+  roleText.textContent =
+    `你是 ${player}P · ${
+      color===1 ? "黑棋 ⚫" : "白棋 ⚪"
+    }`;
+
+  if(over){
+
+    clearInterval(timer);
+
+    timeText.textContent = "";
+
+    statusText.textContent =
+      winner===color
+        ? "🏆 你赢了！"
+        : "😢 你输了！";
+
+  }else{
+
+    statusText.textContent =
+      turn===color
+        ? "👉 轮到你落子"
+        : "⏳ 等待对手落子";
+
+    startTurnTimer(
+      data.turnStart
+    );
+  }
+
+  drawBoard();
+}
+
+async function startGame(data){
+
+  if(data.gameStart) return;
+
+  const black =
+    Math.random() < 0.5 ? 1 : 2;
+
+  const white =
+    black===1 ? 2 : 1;
+
+  await runTransaction(
+    roomRef,
+    current => {
+
+      if(!current) return;
+
+      if(current.gameStart){
+        return current;
+      }
+
+      if(!current.ready1 || !current.ready2){
+        return current;
+      }
+
+      current.gameStart = true;
+      current.chess1 = black;
+      current.chess2 = white;
+      current.turn = 1;
+      current.turnStart = Date.now();
+      current.over = false;
+      current.winner = 0;
+
+      return current;
+    }
+  );
+}
+
+function startTurnTimer(start){
+
+  if(!start) return;
+
+  if(lastTurnStart === start){
+    return;
+  }
+
+  lastTurnStart = start;
+
+  clearInterval(timer);
+
+  timer = setInterval(
+    async () => {
+
+      if(over){
+
+        clearInterval(timer);
+        return;
+      }
+
+      const remain =
+        TIME_LIMIT -
+        Math.floor(
+          (Date.now()-start)/1000
+        );
+
+      timeText.textContent =
+        remain > 0
+          ? `⏱ 剩余 ${remain} 秒`
+          : "⏱ 超时处理中...";
+
+      if(remain <= 0){
+
+        clearInterval(timer);
+
+        /*
+         * 用事务防止两个手机同时处理超时。
+         */
+        await runTransaction(
+          roomRef,
+          current => {
+
+            if(!current || current.over){
+              return current;
+            }
+
+            const currentStart =
+              current.turnStart || 0;
+
+            if(
+              Date.now()-currentStart <
+              TIME_LIMIT*1000
+            ){
+              return current;
+            }
+
+            current.turn =
+              current.turn===1
+                ? 2
+                : 1;
+
+            current.turnStart =
+              Date.now();
+
+            return current;
+          }
+        );
+      }
+
+    },
+    500
+  );
+}
+
+canvas.addEventListener(
+  "pointerup",
+  async event => {
+
+    if(moveBusy || !color || over){
+      return;
+    }
+
+    const rect =
+      canvas.getBoundingClientRect();
+
+    const mx =
+      event.clientX - rect.left;
+
+    const my =
+      event.clientY - rect.top;
+
+    const x =
+      Math.round(
+        (mx-PAD)/CELL
+      );
+
+    const y =
+      Math.round(
+        (my-PAD)/CELL
+      );
+
+    if(
+      x<0 || x>=SIZE ||
+      y<0 || y>=SIZE
+    ){
+      return;
+    }
+
+    moveBusy = true;
+
+    try{
+
+      /*
+       * 再从 Firebase 读取一次，
+       * 避免两个手机同时落子。
+       */
+      const snap =
+        await get(roomRef);
+
+      const data =
+        snap.val();
+
+      if(
+        !data ||
+        data.gameStart!==true ||
+        data.over===true ||
+        data.turn!==color
+      ){
+        return;
+      }
+
+      const currentBoard =
+        Array.isArray(data.board)
+          ? data.board
+          : emptyBoard();
+
+      if(currentBoard[y][x]!==0){
+        return;
+      }
+
+      /*
+       * 使用服务器当前棋盘生成新棋盘，
+       * 不使用可能已经过时的本地 board。
+       */
+      const newBoard =
+        currentBoard.map(row => row.slice());
+
+      const oldBoard =
+        currentBoard.map(row => row.slice());
+
+      newBoard[y][x] = color;
+
+      /*
+       * 临时使用新棋盘检查胜负。
+       */
+      board = newBoard;
+
+      const win =
+        checkWin(x,y,color);
+
+      const nextTurn =
+        color===1 ? 2 : 1;
+
+      await update(
+        roomRef,
+        {
+          board:newBoard,
+
+          lastBoard:oldBoard,
+
+          turn:
+            win
+              ? color
+              : nextTurn,
+
+          turnStart:
+            Date.now(),
+
+          over:win,
+
+          winner:
+            win
+              ? color
+              : 0,
+
+          undoRequest:0
+        }
+      );
+
+    }catch(error){
+
+      console.error(
+        "落子失败：",
+        error
+      );
+
+    }finally{
+
+      setTimeout(
+        () => {
+          moveBusy = false;
+        },
+        250
+      );
+    }
+  }
+);
+
+function renderChat(chats){
+
+  chatBox.innerHTML = "";
+
+  if(!Array.isArray(chats)){
+    return;
+  }
+
+  chats.forEach(text => {
+
+    const div =
+      document.createElement("div");
+
+    div.className = "chatRow";
+
+    div.textContent = text;
+
+    chatBox.appendChild(div);
+  });
+
+  chatBox.scrollTop =
+    chatBox.scrollHeight;
+}
+
+async function sendChat(){
+
+  const text =
+    chatInput.value.trim();
+
+  if(!text) return;
+
+  try{
+
+    const snap =
+      await get(roomRef);
+
+    const data =
+      snap.val();
+
+    if(!data) return;
+
+    const chats =
+      Array.isArray(data.chats)
+        ? [...data.chats]
+        : [];
+
+    chats.push(
+      `[${player}P] ${text}`
+    );
+
+    if(chats.length>50){
+      chats.splice(
+        0,
+        chats.length-50
+      );
+    }
+
+    await update(
+      roomRef,
+      {
+        chats:chats
+      }
+    );
+
+    chatInput.value = "";
+
+  }catch(error){
+
+    console.error(
+      "发送消息失败",
+      error
+    );
+  }
+}
+
+document
+  .getElementById("sendChat")
+  .addEventListener(
+    "click",
+    sendChat
+  );
+
+chatInput.addEventListener(
+  "keydown",
+  event => {
+
+    if(event.key==="Enter"){
+      sendChat();
+    }
+  }
+);
+
+shareBtn.addEventListener(
+  "click",
+  async () => {
+
+    const link =
+      makeInviteLink(roomId);
+
+    try{
+
+      await navigator.clipboard.writeText(link);
+
+      tip.textContent =
+        "邀请链接已复制，发给2P即可！";
+
+    }catch(error){
+
+      prompt(
+        "复制下面的邀请链接：",
+        link
+      );
+    }
+  }
+);
+
+readyBtn.addEventListener(
+  "click",
+  async () => {
+
+    if(!player) return;
+
+    const key =
+      player===1
+        ? "ready1"
+        : "ready2";
+
+    try{
+
+      await update(
+        roomRef,
+        {
+          [key]:true
+        }
+      );
+
+      readyBtn.disabled = true;
+
+    }catch(error){
+
+      console.error(
+        "准备失败：",
+        error
+      );
+    }
+  }
+);
+
+document
+  .getElementById("restartBtn")
+  .addEventListener(
+    "click",
+    async () => {
+
+      const key =
+        player===1
+          ? "restart1"
+          : "restart2";
+
+      await update(
+        roomRef,
+        {
+          [key]:true
+        }
+      );
+
+      alert(
+        "已请求重新开局，等待对手确认。"
+      );
+    }
+  );
+
+document
+  .getElementById("undoBtn")
+  .addEventListener(
+    "click",
+    async () => {
+
+      const snap =
+        await get(roomRef);
+
+      const data =
+        snap.val();
+
+      if(!data?.lastBoard){
+
+        alert(
+          "暂无可以悔棋的步骤"
+        );
+
+        return;
+      }
+
+      if(data.undoRequest){
+
+        alert(
+          "已经有悔棋请求了"
+        );
+
+        return;
+      }
+
+      if(
+        confirm(
+          "向对手请求悔棋？"
+        )
+      ){
+
+        await update(
+          roomRef,
+          {
+            undoRequest:player
+          }
+        );
+      }
+    }
+  );
+
+async function processRoomActions(data){
+
+  /*
+   * 双方都同意重新开局。
+   * 只允许1P执行真正重置。
+   */
+  if(
+    player===1 &&
+    data.restart1 &&
+    data.restart2
+  ){
+
+    await update(
+      roomRef,
+      {
+        ready1:false,
+        ready2:false,
+
+        gameStart:false,
+
+        chess1:0,
+        chess2:0,
+
+        board:emptyBoard(),
+
+        turn:1,
+        turnStart:0,
+
+        over:false,
+        winner:0,
+
+        chats:[],
+        lastBoard:null,
+
+        undoRequest:0,
+
+        restart1:false,
+        restart2:false
+      }
+    );
+
+    return;
+  }
+
+  /*
+   * 处理对方悔棋请求。
+   */
+  if(
+    data.undoRequest &&
+    data.undoRequest!==player
+  ){
+
+    const agree =
+      confirm(
+        "对手请求悔棋，是否同意？"
+      );
+
+    if(agree){
+
+      await update(
+        roomRef,
+        {
+          board:
+            data.lastBoard,
+
+          turn:
+            data.undoRequest,
+
+          turnStart:
+            Date.now(),
+
+          over:false,
+          winner:0,
+
+          lastBoard:null,
+          undoRequest:0
+        }
+      );
+
+    }else{
+
+      await update(
+        roomRef,
+        {
+          undoRequest:0
+        }
+      );
+    }
+  }
+}
+
+async function init(){
+
+  try{
+
+    sessionId =
+      getSessionId();
+
+    /*
+     * 第一步：
+     * 先确定房间。
+     */
+    await joinExistingRoom();
+
+    /*
+     * 第二步：
+     * 房间确定后再监听。
+     *
+     * 这是本次修复最关键的一步。
+     */
+    startRoomListener();
+
+    drawBoard();
+
+  }catch(error){
+
+    console.error(
+      "初始化失败：",
+      error
+    );
+
+    tip.textContent =
+      "❌ " + error.message;
+
+    readyBtn.style.display =
+      "none";
+
+    shareBtn.style.display =
+      "none";
+  }
+}
+
+init();
+</script>
+</body>
+</html>
